@@ -8,18 +8,9 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   
-  // Image optimization configuration - CORRECTED VERSION
+  // Image optimization configuration - UPDATED
   images: {
-    // Allow images from these domains
-    domains: [
-      'localhost',
-      '127.0.0.1', 
-      'via.placeholder.com',
-      'images.unsplash.com',
-      'picsum.photos'
-    ],
-    
-    // Remote patterns for image optimization
+    // Remove deprecated 'domains' and use only remotePatterns
     remotePatterns: [
       {
         protocol: 'http',
@@ -48,20 +39,18 @@ const nextConfig = {
       },
     ],
     
-    // Image sizes for optimization
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     
-    // Only allow webp and avif formats
     formats: ['image/webp', 'image/avif'],
   },
   
-  // Environment variables exposed to the browser
+  // Environment variables
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
   
-  // Redirects for better UX
+  // Redirects
   async redirects() {
     return [
       {
@@ -74,10 +63,16 @@ const nextConfig = {
         destination: '/admin/dashboard',
         permanent: false,
       },
+      // Add redirect for order-confirmation without params
+      {
+        source: '/order-confirmation',
+        destination: '/',
+        permanent: false,
+      },
     ]
   },
   
-  // Headers for security and caching
+  // Headers
   async headers() {
     return [
       {
@@ -103,7 +98,6 @@ const nextConfig = {
   
   // Compiler options
   compiler: {
-    // Remove console logs in production
     removeConsole: process.env.NODE_ENV === 'production' ? {
       exclude: ['error', 'warn'],
     } : false,

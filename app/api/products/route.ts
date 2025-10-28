@@ -1,16 +1,82 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const [products] = await pool.execute(`
+    const { searchParams } = new URL(request.url)
+    const category = searchParams.get('category')
+    const limit = searchParams.get('limit')
+    const exclude = searchParams.get('exclude')
+
+    let query = `
       SELECT id, title, description, price, original_price, category, subcategory, brand, 
              stock_quantity, availability, images, rating, review_count, tags, featured, created_at
       FROM products 
       WHERE published = TRUE
-      ORDER BY featured DESC, created_at DESC
-    `)
-    return NextResponse.json(products)
+    `
+    const queryParams: any[] = []
+
+    if (category) {
+      query += ' AND category = ?'
+      queryParams.push(category)
+    }
+
+    if (exclude) {
+      query += ' AND id != ?'
+      queryParams.push(exclude)
+    }
+
+    query += ' ORDER BY featured DESC, created_at DESC'
+
+    if (limit) {
+      query += ' LIMIT ?'
+      queryParams.push(parseInt(limit))
+    }
+
+    const [products] = await pool.execute(query, queryParams)
+
+    // Format products
+    const formattedProducts = (products as any[]).map(product => {
+      // Parse images
+      let images: string[] = []
+      if (product.images) {
+        try {
+          if (typeof product.images === 'string') {
+            const parsed = JSON.parse(product.images)
+            images = Array.isArray(parsed) ? parsed : [parsed].filter(Boolean)
+          } else if (Array.isArray(product.images)) {
+            images = product.images
+          }
+        } catch {
+          images = [product.images].filter(Boolean)
+        }
+      }
+
+      return {
+        id: product.id,
+        name: product.title,
+        description: product.description,
+        price: parseFloat(product.price),
+        original_price: product.original_price ? parseFloat(product.original_price) : null,
+        images: images.length > 0 ? images : ['/api/placeholder/400/400?text=Product'],
+        category: product.category,
+        subcategory: product.subcategory,
+        brand: product.brand,
+        inStock: product.stock_quantity > 0,
+        stockCount: product.stock_quantity,
+        rating: product.rating || 4.5,
+        reviewCount: product.review_count || 0,
+        featured: product.featured || false,
+        tags: product.tags ? JSON.parse(product.tags) : [],
+        availability: product.availability
+      }
+    })
+
+    return NextResponse.json({
+      products: formattedProducts,
+      total: formattedProducts.length
+    })
+
   } catch (error) {
     console.error('Failed to fetch products:', error)
     return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
