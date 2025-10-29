@@ -29,9 +29,9 @@ export function CartDrawer({ children }: CartDrawerProps) {
   const cartTotal = getCartTotal()
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("ETH", {
       style: "currency",
-      currency: "USD",
+      currency: "ETB",
     }).format(price)
   }
 

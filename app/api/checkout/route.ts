@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import pool from '@/lib/db';
+import { writeFile, mkdir } from 'fs/promises';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,9 +18,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Handle FormData instead of JSON
+    // Handle FormData
     const formData = await request.formData();
     const orderDataString = formData.get('orderData') as string;
+    const paymentScreenshot = formData.get('paymentScreenshot') as File;
     
     if (!orderDataString) {
       return NextResponse.json({ error: 'Order data is required' }, { status: 400 });
@@ -41,6 +45,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    let paymentVerificationUrl = null;
+    let paymentScreenshotFilename = null;
+
+    // Handle payment verification based on payment method
+    if (paymentMethod === 'bank_transfer' && bankReceiptUrl) {
+      paymentVerificationUrl = bankReceiptUrl;
+    } else if (paymentMethod === 'telebirr' && paymentScreenshot) {
+      // Handle file upload for Telebirr screenshot
+      try {
+        // Create uploads directory if it doesn't exist
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'payments');
+        await mkdir(uploadsDir, { recursive: true });
+
+        // Generate unique filename
+        const fileExtension = paymentScreenshot.name.split('.').pop();
+        const uniqueFilename = `payment_${uuidv4()}.${fileExtension}`;
+        const filePath = path.join(uploadsDir, uniqueFilename);
+
+        // Convert file to buffer and save
+        const bytes = await paymentScreenshot.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        await writeFile(filePath, buffer);
+
+        paymentScreenshotFilename = uniqueFilename;
+        paymentVerificationUrl = `/uploads/payments/${uniqueFilename}`;
+        
+        console.log(`✅ Payment screenshot saved: ${paymentScreenshotFilename}`);
+      } catch (fileError) {
+        console.error('Failed to save payment screenshot:', fileError);
+        return NextResponse.json({ error: 'Failed to upload payment screenshot' }, { status: 500 });
+      }
+    }
+
     const connection = await pool.getConnection();
     
     try {
@@ -49,11 +86,11 @@ export async function POST(request: NextRequest) {
       // Generate order number
       const orderNumber = `DVZ-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-      // Create order with customer email
+      // Create order with payment verification data
       const [orderResult] = await connection.execute(
-        `INSERT INTO orders (user_id, order_number, total_amount, shipping_address, payment_method, status, payment_status, customer_email) 
-         VALUES (?, ?, ?, ?, ?, 'pending', 'pending', ?)`,
-        [user.id, orderNumber, totalAmount, JSON.stringify(shippingAddress), paymentMethod, email]
+        `INSERT INTO orders (user_id, order_number, total_amount, shipping_address, payment_method, status, payment_status, customer_email, payment_verification_url, payment_screenshot_filename) 
+         VALUES (?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
+        [user.id, orderNumber, totalAmount, JSON.stringify(shippingAddress), paymentMethod, email, paymentVerificationUrl, paymentScreenshotFilename]
       );
 
       const orderId = (orderResult as any).insertId;
@@ -103,6 +140,7 @@ export async function POST(request: NextRequest) {
       await connection.commit();
 
       console.log(`✅ Order created successfully: ${orderNumber} for user ${user.id}`);
+      console.log(`📁 Payment verification: ${paymentVerificationUrl}`);
 
       // Enhanced response with order details
       return NextResponse.json({ 

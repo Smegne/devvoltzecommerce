@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ dimensions: string[] }> }
+  { params }: { params: { dimensions: string[] } }
 ) {
   try {
-    const { dimensions } = await params
+    const { dimensions } = params
     const [width = 400, height = 400] = dimensions[0].split('x').map(Number)
     
     // Get text parameter from search params
     const { searchParams } = new URL(request.url)
     const text = searchParams.get('text') || `${width}x${height}`
     
-    // Create a simple SVG placeholder
+    // Create a simple SVG placeholder - OPTIMIZED VERSION
     const svg = `
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -26,7 +26,7 @@ export async function GET(
         <text 
           x="50%" 
           y="50%" 
-          font-family="Arial, sans-serif" 
+          font-family="system-ui, -apple-system, sans-serif" 
           font-size="${Math.min(width, height) / 10}" 
           fill="#6B7280" 
           text-anchor="middle" 
@@ -45,12 +45,12 @@ export async function GET(
       },
     })
   } catch (error) {
-    // Fallback to basic SVG
+    // Ultra-fast fallback
     const fallbackSvg = `
       <svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
         <rect width="100%" height="100%" fill="#f3f4f6"/>
-        <text x="50%" y="50%" font-family="Arial" font-size="16" fill="#9ca3af" text-anchor="middle" dy=".3em">
-          Placeholder
+        <text x="50%" y="50%" font-family="system-ui" font-size="16" fill="#9ca3af" text-anchor="middle" dy=".3em">
+          Product
         </text>
       </svg>
     `
@@ -63,3 +63,7 @@ export async function GET(
     })
   }
 }
+
+// Add this to improve performance
+export const runtime = 'edge'
+export const dynamic = 'force-static'

@@ -41,6 +41,7 @@ export interface Order {
   id: number
   order_number: string
   user_id: number
+  
   status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
   total_amount: number
   payment_status: 'pending' | 'paid' | 'failed' | 'refunded'

@@ -27,7 +27,7 @@ export function DashboardSidebar() {
         <CardContent className="p-6">
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={user?.avatar || "/placeholder.svg"} />
+              <AvatarImage src={(user as any)?.avatar || "/placeholder.svg"} />
               <AvatarFallback>{user?.name?.charAt(0) || "U"}</AvatarFallback>
             </Avatar>
             <div>

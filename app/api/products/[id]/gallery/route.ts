@@ -30,7 +30,6 @@ export async function GET(
     )
   }
 }
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -50,6 +49,7 @@ export async function POST(
     const { id: productId } = await params
     const formData = await request.formData()
     const images = formData.getAll('images') as File[]
+    const imageType = formData.get('imageType') as string || 'angle'
 
     if (!images || images.length === 0) {
       return NextResponse.json(
@@ -64,20 +64,36 @@ export async function POST(
     try {
       await connection.beginTransaction()
 
-      for (const image of images) {
+      // Get current max sort_order for this product
+      const [maxOrderResult] = await connection.execute(
+        'SELECT COALESCE(MAX(sort_order), 0) as max_order FROM product_gallery WHERE product_id = ?',
+        [productId]
+      )
+      const maxOrder = (maxOrderResult as any[])[0]?.max_order || 0
+
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i]
+        
         // For demo purposes, we'll use the placeholder API
         // In production, integrate with cloud storage (AWS S3, Cloudinary, etc.)
-        const imageUrl = `/api/placeholder/400/400?text=Gallery+${Date.now()}`
+        const imageUrl = `/api/placeholder/800/800?text=${imageType}+${i+1}`
         
         const [result] = await connection.execute(
-          `INSERT INTO product_gallery (product_id, image_url, alt_text, sort_order) 
-           VALUES (?, ?, ?, ?)`,
-          [productId, imageUrl, `Gallery image for product ${productId}`, 0]
+          `INSERT INTO product_gallery (product_id, image_url, alt_text, sort_order, image_type) 
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            productId, 
+            imageUrl, 
+            `${imageType} view ${i + 1} for product ${productId}`, 
+            maxOrder + i + 1,
+            imageType
+          ]
         )
 
         results.push({
           imageId: (result as any).insertId,
-          originalName: image.name
+          originalName: image.name,
+          imageType
         })
       }
 

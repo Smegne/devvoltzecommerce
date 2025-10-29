@@ -135,10 +135,12 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <Check className="w-4 h-4 text-[#0088CC]" />
                 <span>{tag}</span>
               </div>
+
+              
             ))
           ) : (
             <div className="text-white/60 text-sm">
-              No features specified. Check the Features section below for detailed information.
+             see below for details.
             </div>
           )}
         </div>
