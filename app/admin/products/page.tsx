@@ -15,24 +15,25 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 
+// Safe product interface with optional fields
 interface Product {
   id: number
   title: string
   description: string
   price: number
-  original_price: number | null
+  original_price?: number | null
   category: string
-  subcategory: string | null
-  brand: string | null
+  subcategory?: string | null
+  brand?: string | null
   stock_quantity: number
   availability: 'in_stock' | 'out_of_stock' | 'pre_order'
-  images: string[]
-  featured: boolean
-  published: boolean
-  created_at: string
-  updated_at: string
-  rating: number
-  review_count: number
+  images?: string[]
+  featured?: boolean
+  published?: boolean
+  created_at?: string
+  updated_at?: string
+  rating?: number
+  review_count?: number
 }
 
 export default function AdminProductsPage() {
@@ -43,6 +44,42 @@ export default function AdminProductsPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+
+  // Safe data processing function
+  const processProductsData = (data: any): Product[] => {
+    if (!data) return []
+    
+    // Handle different response formats
+    if (Array.isArray(data)) {
+      return data.map(item => ({
+        id: item.id || 0,
+        title: item.title || 'Untitled Product',
+        description: item.description || '',
+        price: typeof item.price === 'number' ? item.price : 0,
+        original_price: item.original_price || null,
+        category: item.category || 'Uncategorized',
+        subcategory: item.subcategory || null,
+        brand: item.brand || null,
+        stock_quantity: typeof item.stock_quantity === 'number' ? item.stock_quantity : 0,
+        availability: item.availability || 'in_stock',
+        images: Array.isArray(item.images) ? item.images : [],
+        featured: Boolean(item.featured),
+        published: Boolean(item.published),
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || new Date().toISOString(),
+        rating: typeof item.rating === 'number' ? item.rating : 0,
+        review_count: typeof item.review_count === 'number' ? item.review_count : 0
+      }))
+    }
+    
+    // If data has a products property
+    if (data.products && Array.isArray(data.products)) {
+      return processProductsData(data.products)
+    }
+    
+    console.warn('Unexpected API response format:', data)
+    return []
+  }
 
   // Check if user is admin and redirect if not
   useEffect(() => {
@@ -66,9 +103,11 @@ export default function AdminProductsPage() {
       
       if (!token) {
         setError('Authentication required. Please log in again.')
+        setIsLoading(false)
         return
       }
 
+      console.log('Fetching products from API...')
       const response = await fetch('/api/admin/products', {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -76,11 +115,19 @@ export default function AdminProductsPage() {
         }
       })
 
+      console.log('API response status:', response.status)
+      
       if (response.ok) {
-        const productsData = await response.json()
-        setProducts(productsData)
+        const responseData = await response.json()
+        console.log('Raw API response:', responseData)
+        
+        const processedProducts = processProductsData(responseData)
+        console.log('Processed products:', processedProducts)
+        
+        setProducts(processedProducts)
       } else {
         const errorText = await response.text()
+        console.error('API error:', response.status, errorText)
         setError(`Failed to load products: ${response.status} ${errorText}`)
       }
     } catch (error) {
@@ -92,10 +139,12 @@ export default function AdminProductsPage() {
   }
 
   const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.brand?.toLowerCase().includes(searchQuery.toLowerCase())
+    const searchLower = searchQuery.toLowerCase()
+    const matchesSearch = 
+      product.title?.toLowerCase().includes(searchLower) ||
+      product.description?.toLowerCase().includes(searchLower) ||
+      product.category?.toLowerCase().includes(searchLower) ||
+      product.brand?.toLowerCase().includes(searchLower)
     
     const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
     
@@ -109,14 +158,15 @@ export default function AdminProductsPage() {
     }).format(price)
   }
 
-  const categories = [...new Set(products.map(product => product.category))]
+  const categories = [...new Set(products.map(product => product.category).filter(Boolean))]
 
   const openProductDetail = (product: Product) => {
     window.open(`/product/${product.id}`, '_blank')
   }
 
   const openEditProduct = (product: Product) => {
-    router.push(`/admin/dashboard`)
+    // Redirect to dashboard which has the edit functionality
+    router.push('/admin/dashboard')
   }
 
   const deleteProduct = async (productId: number) => {
@@ -208,7 +258,7 @@ export default function AdminProductsPage() {
                   </Button>
                   <Button onClick={() => router.push('/admin/dashboard')}>
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Product
+                    Go to Dashboard
                   </Button>
                 </div>
               </div>
@@ -217,11 +267,25 @@ export default function AdminProductsPage() {
                 <Card className="border-red-200 bg-red-50">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-red-700">{error}</p>
+                      <div>
+                        <p className="text-red-700 font-medium">Error loading products</p>
+                        <p className="text-red-600 text-sm mt-1">{error}</p>
+                      </div>
                       <Button variant="outline" size="sm" onClick={fetchProducts}>
                         Retry
                       </Button>
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Debug info - remove in production */}
+              {process.env.NODE_ENV === 'development' && (
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="p-4">
+                    <p className="text-blue-700 text-sm">
+                      Products loaded: {products.length} | Filtered: {filteredProducts.length}
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -283,11 +347,16 @@ export default function AdminProductsPage() {
                                       src={product.images[0]}
                                       alt={product.title}
                                       className="w-12 h-12 object-cover rounded-lg"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = '/api/placeholder/48/48'
+                                      }}
                                     />
                                   )}
                                   <div>
                                     <p className="font-medium">{product.title}</p>
-                                    <p className="text-sm text-muted-foreground line-clamp-1">{product.description}</p>
+                                    <p className="text-sm text-muted-foreground line-clamp-1">
+                                      {product.description || 'No description'}
+                                    </p>
                                   </div>
                                 </div>
                               </td>
@@ -297,7 +366,7 @@ export default function AdminProductsPage() {
                               <td className="p-4">
                                 <div>
                                   <p className="font-medium">{formatPrice(product.price)}</p>
-                                  {product.original_price && (
+                                  {product.original_price && product.original_price > product.price && (
                                     <p className="text-sm text-muted-foreground line-through">
                                       {formatPrice(product.original_price)}
                                     </p>
@@ -358,7 +427,7 @@ export default function AdminProductsPage() {
                               : "Get started by adding your first product."}
                           </p>
                           <Button onClick={() => router.push('/admin/dashboard')}>
-                            Add Product
+                            Go to Dashboard
                           </Button>
                         </div>
                       )}
