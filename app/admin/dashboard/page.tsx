@@ -4,10 +4,6 @@ import { useState, useEffect } from "react"
 import { 
   Package, 
   Users, 
-
-
-  
- 
   ShoppingCart, 
   BarChart3, 
   Plus, 
@@ -329,33 +325,76 @@ const updateGalleryImageType = async (imageId: number, newType: string) => {
   }
 }
 
-// Update the openEditProduct function to fetch gallery images
+// FIXED: Enhanced openEditProduct function with production-safe state updates
 const openEditProduct = (product: Product) => {
-  setProductForm({
-    title: product.title,
-    description: product.description,
-    price: product.price.toString(),
-    original_price: product.original_price?.toString() || "",
-    category: product.category,
-    subcategory: product.subcategory || "",
-    brand: product.brand || "",
-    stock_quantity: product.stock_quantity.toString(),
-    availability: product.availability,
-    featured: product.featured,
-    published: product.published
-  })
-  setSelectedProduct(product)
-  setShowEditProduct(true)
-  // Fetch gallery images when opening edit modal
-  fetchGalleryImages(product.id)
+  console.log('🔄 openEditProduct called with:', product.id, product.title)
+  
+  // Use setTimeout to ensure state updates happen in the next tick (production fix)
+  setTimeout(() => {
+    setProductForm({
+      title: product.title,
+      description: product.description,
+      price: product.price.toString(),
+      original_price: product.original_price?.toString() || "",
+      category: product.category,
+      subcategory: product.subcategory || "",
+      brand: product.brand || "",
+      stock_quantity: product.stock_quantity.toString(),
+      availability: product.availability,
+      featured: product.featured,
+      published: product.published
+    })
+    setSelectedProduct(product)
+    setShowEditProduct(true)
+    console.log('✅ Modal state updated, showEditProduct should be true')
+    
+    // Fetch gallery images when opening edit modal
+    fetchGalleryImages(product.id)
+  }, 10)
 }
   
-const openAddFeature = (product: Product) => {
+// FIXED: Enhanced openProductDetail function with production-safe state updates
+const openProductDetail = (product: Product) => {
+  console.log('👁️ openProductDetail called with:', product.id, product.title)
+  
+  // Use setTimeout to ensure state updates happen in the next tick (production fix)
+  setTimeout(() => {
+    setSelectedProduct(product)
+    setShowProductDetail(true)
+    console.log('✅ Modal state updated, showProductDetail should be true')
+  }, 10)
+}
+
+// FIXED: Enhanced dropdown handlers to prevent event issues
+const handleEditClick = (product: Product, e: React.MouseEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  console.log('✏️ Edit button clicked for:', product.title)
+  openEditProduct(product)
+}
+
+const handleViewClick = (product: Product, e: React.MouseEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  console.log('👁️ View button clicked for:', product.title)
+  openProductDetail(product)
+}
+
+const handleAddFeatureClick = (product: Product, e: React.MouseEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  console.log('➕ Add Feature button clicked for:', product.title)
   setSelectedProductForFeature(product)
   setFeatureForm({ title: "", description: "" })
   setShowAddFeature(true)
 }
 
+const handleDeleteClick = (productId: number, e: React.MouseEvent) => {
+  e.preventDefault()
+  e.stopPropagation()
+  console.log('🗑️ Delete button clicked for product:', productId)
+  deleteProduct(productId)
+}
   
   // Check if user is admin and redirect if not
   useEffect(() => {
@@ -552,14 +591,6 @@ const openVerificationModal = (order: Order) => {
   const openAddProduct = () => {
     resetProductForm()
     setShowAddProduct(true)
-  }
-
-  // openEditProduct is declared earlier (the version above includes fetching gallery images),
-  // so we remove this duplicate to avoid redeclaring the block-scoped variable.
-
-  const openProductDetail = (product: Product) => {
-    setSelectedProduct(product)
-    setShowProductDetail(true)
   }
 
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -1250,36 +1281,46 @@ const openVerificationModal = (order: Order) => {
                               {product.featured ? "Yes" : "No"}
                             </Button>
                           </TableCell>
-                       <TableCell className="text-right">
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button variant="ghost" size="icon" className="border-2">
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-48">
-      <DropdownMenuItem onClick={() => openProductDetail(product)}>
-        <Eye className="h-4 w-4 mr-2" />
-        View Details
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => openEditProduct(product)}>
-        <Edit className="h-4 w-4 mr-2" />
-        Edit Product
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => openAddFeature(product)}>
-        <Plus className="h-4 w-4 mr-2" />
-        Add Feature
-      </DropdownMenuItem>
-      <DropdownMenuItem 
-        className="text-red-600 focus:text-red-600"
-        onClick={() => deleteProduct(product.id)}
-      >
-        <Trash2 className="h-4 w-4 mr-2" />
-        Delete Product
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-</TableCell>
+                          {/* FIXED: Enhanced Actions Dropdown with production-safe handlers */}
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="border-2">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem 
+                                  onClick={(e) => handleViewClick(product, e)}
+                                  className="cursor-pointer"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={(e) => handleEditClick(product, e)}
+                                  className="cursor-pointer"
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit Product
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={(e) => handleAddFeatureClick(product, e)}
+                                  className="cursor-pointer"
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Feature
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-red-600 focus:text-red-600 cursor-pointer"
+                                  onClick={(e) => handleDeleteClick(product.id, e)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Product
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1305,151 +1346,150 @@ const openVerificationModal = (order: Order) => {
           </TabsContent>
 
           {/* Enhanced Orders Tab */}
-          {/* Enhanced Orders Tab */}
-<TabsContent value="orders" className="space-y-6">
-  <Card className="border-0 shadow-sm">
-    <CardHeader>
-      <CardTitle>Order Management</CardTitle>
-      <CardDescription>Process and manage customer orders • {orders.length} total orders</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <div className="rounded-lg border border-slate-200 overflow-hidden">
-        <Table>
-          <TableHeader className="bg-slate-50/50">
-            <TableRow>
-              <TableHead className="font-semibold">Order ID</TableHead>
-              <TableHead className="font-semibold">Customer</TableHead>
-              <TableHead className="font-semibold text-right">Amount</TableHead>
-              <TableHead className="font-semibold">Payment Method</TableHead>
-              <TableHead className="font-semibold">Payment Proof</TableHead>
-              <TableHead className="font-semibold">Verified</TableHead>
-              <TableHead className="font-semibold">Status</TableHead>
-              <TableHead className="font-semibold">Payment</TableHead>
-              <TableHead className="font-semibold">Date</TableHead>
-              <TableHead className="font-semibold text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map((order) => (
-              <TableRow key={order.id} className="hover:bg-slate-50/30 transition-colors">
-                <TableCell className="font-medium">{order.order_number}</TableCell>
-                <TableCell>
-                  <div>
-                    <div className="font-medium">{order.name || 'Guest'}</div>
-                    <div className="text-xs text-muted-foreground">{order.customer_email || 'No email'}</div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right font-medium">${order.total_amount}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-xs capitalize">
-                    {order.payment_method?.replace('_', ' ') || 'N/A'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {order.payment_verification_url ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => window.open(order.payment_verification_url!, '_blank')}
-                    >
-                      <Eye className="h-3 w-3 mr-1" />
-                      View Proof
-                    </Button>
-                  ) : (
-                    <Badge variant="outline" className="text-xs">
-                      No Proof
-                    </Badge>
+          <TabsContent value="orders" className="space-y-6">
+            <Card className="border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Order Management</CardTitle>
+                <CardDescription>Process and manage customer orders • {orders.length} total orders</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <Table>
+                    <TableHeader className="bg-slate-50/50">
+                      <TableRow>
+                        <TableHead className="font-semibold">Order ID</TableHead>
+                        <TableHead className="font-semibold">Customer</TableHead>
+                        <TableHead className="font-semibold text-right">Amount</TableHead>
+                        <TableHead className="font-semibold">Payment Method</TableHead>
+                        <TableHead className="font-semibold">Payment Proof</TableHead>
+                        <TableHead className="font-semibold">Verified</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                        <TableHead className="font-semibold">Payment</TableHead>
+                        <TableHead className="font-semibold">Date</TableHead>
+                        <TableHead className="font-semibold text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.map((order) => (
+                        <TableRow key={order.id} className="hover:bg-slate-50/30 transition-colors">
+                          <TableCell className="font-medium">{order.order_number}</TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{order.name || 'Guest'}</div>
+                              <div className="text-xs text-muted-foreground">{order.customer_email || 'No email'}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">${order.total_amount}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {order.payment_method?.replace('_', ' ') || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {order.payment_verification_url ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => window.open(order.payment_verification_url!, '_blank')}
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                View Proof
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">
+                                No Proof
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {order.payment_verified ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Verified
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs cursor-pointer hover:bg-yellow-100"
+                                onClick={() => openVerificationModal(order)}>
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Verify
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={order.status}
+                              onValueChange={(value: Order['status']) => updateOrderStatus(order.id, value)}
+                            >
+                              <SelectTrigger className="w-32 border-2">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="confirmed">Confirmed</SelectItem>
+                                <SelectItem value="processing">Processing</SelectItem>
+                                <SelectItem value="shipped">Shipped</SelectItem>
+                                <SelectItem value="delivered">Delivered</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusVariant(order.payment_status)}>
+                              {order.payment_status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(order.created_at).toLocaleTimeString()}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="border-2">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => setSelectedOrder(order)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                {!order.payment_verified && order.payment_verification_url && (
+                                  <DropdownMenuItem onClick={() => openVerificationModal(order)}>
+                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    Verify Payment
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem 
+                                  className="text-red-600 focus:text-red-600"
+                                  onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Cancel Order
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {orders.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+                      <p className="text-lg font-medium">No orders yet</p>
+                      <p className="text-sm mt-1">Orders will appear here when customers make purchases</p>
+                    </div>
                   )}
-                </TableCell>
-                <TableCell>
-                  {order.payment_verified ? (
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-xs cursor-pointer hover:bg-yellow-100"
-                      onClick={() => openVerificationModal(order)}>
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Verify
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Select
-                    value={order.status}
-                    onValueChange={(value: Order['status']) => updateOrderStatus(order.id, value)}
-                  >
-                    <SelectTrigger className="w-32 border-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="confirmed">Confirmed</SelectItem>
-                      <SelectItem value="processing">Processing</SelectItem>
-                      <SelectItem value="shipped">Shipped</SelectItem>
-                      <SelectItem value="delivered">Delivered</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getStatusVariant(order.payment_status)}>
-                    {order.payment_status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="text-sm">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(order.created_at).toLocaleTimeString()}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="border-2">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => setSelectedOrder(order)}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                      </DropdownMenuItem>
-                      {!order.payment_verified && order.payment_verification_url && (
-                        <DropdownMenuItem onClick={() => openVerificationModal(order)}>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Verify Payment
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem 
-                        className="text-red-600 focus:text-red-600"
-                        onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Cancel Order
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {orders.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-            <p className="text-lg font-medium">No orders yet</p>
-            <p className="text-sm mt-1">Orders will appear here when customers make purchases</p>
-          </div>
-        )}
-      </div>
-    </CardContent>
-  </Card>
-</TabsContent>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Enhanced Users Tab */}
           <TabsContent value="users" className="space-y-6">
@@ -1649,248 +1689,248 @@ const openVerificationModal = (order: Order) => {
           )}
         </DialogContent>
       </Dialog>
-{/* Payment Verification Modal */}
-{/* Payment Verification Modal */}
-<Dialog open={showVerificationModal} onOpenChange={setShowVerificationModal}>
-  <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-    <DialogHeader className="flex-shrink-0">
-      <DialogTitle>Verify Payment</DialogTitle>
-      <DialogDescription>
-        Review payment proof and verify the payment for order {selectedOrderForVerification?.order_number}
-      </DialogDescription>
-    </DialogHeader>
-    
-    {selectedOrderForVerification && (
-      <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-        {/* Order Information */}
-        <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-slate-50/50">
-          <div>
-            <Label className="text-sm font-medium">Order Number</Label>
-            <p className="font-semibold">{selectedOrderForVerification.order_number}</p>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Amount</Label>
-            <p className="font-semibold">${selectedOrderForVerification.total_amount}</p>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Payment Method</Label>
-            <p className="font-semibold capitalize">{selectedOrderForVerification.payment_method?.replace('_', ' ')}</p>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Customer</Label>
-            <p className="font-semibold">{selectedOrderForVerification.customer_email}</p>
-          </div>
-        </div>
 
-        {/* Payment Proof */}
-        <div>
-          <Label className="text-sm font-medium mb-2 block">Payment Proof</Label>
-          {selectedOrderForVerification.payment_verification_url ? (
-            <div className="border rounded-lg p-4">
-              {selectedOrderForVerification.payment_method === 'telebirr' ? (
-                <div className="space-y-4">
-                  <div className="max-h-80 overflow-y-auto rounded-lg border bg-slate-50/50">
-                    <img 
-                      src={selectedOrderForVerification.payment_verification_url} 
-                      alt="Payment Screenshot" 
-                      className="w-full h-auto object-contain transition-transform duration-300 hover:scale-105 cursor-zoom-in"
-                      onClick={() => window.open(selectedOrderForVerification.payment_verification_url!, '_blank')}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => window.open(selectedOrderForVerification.payment_verification_url!, '_blank')}
-                      className="flex-1 transition-all duration-200 hover:scale-105"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Open Full Image
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        const img = new Image();
-                        img.src = selectedOrderForVerification.payment_verification_url!;
-                        img.onload = () => {
-                          window.open(selectedOrderForVerification.payment_verification_url!, '_blank');
-                        };
-                      }}
-                      className="flex-1 transition-all duration-200 hover:scale-105"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View in New Tab
-                    </Button>
-                  </div>
+      {/* Payment Verification Modal */}
+      <Dialog open={showVerificationModal} onOpenChange={setShowVerificationModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Verify Payment</DialogTitle>
+            <DialogDescription>
+              Review payment proof and verify the payment for order {selectedOrderForVerification?.order_number}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedOrderForVerification && (
+            <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+              {/* Order Information */}
+              <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-slate-50/50">
+                <div>
+                  <Label className="text-sm font-medium">Order Number</Label>
+                  <p className="font-semibold">{selectedOrderForVerification.order_number}</p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-3 bg-slate-50/50 rounded-lg border">
-                    <p className="text-sm font-medium mb-2">Bank Transfer Receipt URL:</p>
-                    <div className="max-h-20 overflow-y-auto p-2 bg-white rounded border">
-                      <a 
-                        href={selectedOrderForVerification.payment_verification_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline text-sm break-all transition-colors duration-200 hover:text-blue-700"
-                      >
-                        {selectedOrderForVerification.payment_verification_url}
-                      </a>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => window.open(selectedOrderForVerification.payment_verification_url!, '_blank')}
-                      className="flex-1 transition-all duration-200 hover:scale-105"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Receipt
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedOrderForVerification.payment_verification_url!);
-                        // You can add a toast notification here
-                        alert('URL copied to clipboard!');
-                      }}
-                      className="flex-1 transition-all duration-200 hover:scale-105"
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy URL
-                    </Button>
-                  </div>
+                <div>
+                  <Label className="text-sm font-medium">Amount</Label>
+                  <p className="font-semibold">${selectedOrderForVerification.total_amount}</p>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="border rounded-lg p-6 text-center text-muted-foreground bg-slate-50/50 transition-all duration-300 hover:bg-slate-100/50">
-              <AlertCircle className="h-12 w-12 mx-auto mb-3 text-slate-400 transition-transform duration-300 hover:scale-110" />
-              <p className="text-lg font-medium">No payment proof provided</p>
-              <p className="text-sm mt-1">Customer did not upload any payment verification</p>
+                <div>
+                  <Label className="text-sm font-medium">Payment Method</Label>
+                  <p className="font-semibold capitalize">{selectedOrderForVerification.payment_method?.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Customer</Label>
+                  <p className="font-semibold">{selectedOrderForVerification.customer_email}</p>
+                </div>
+              </div>
+
+              {/* Payment Proof */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Payment Proof</Label>
+                {selectedOrderForVerification.payment_verification_url ? (
+                  <div className="border rounded-lg p-4">
+                    {selectedOrderForVerification.payment_method === 'telebirr' ? (
+                      <div className="space-y-4">
+                        <div className="max-h-80 overflow-y-auto rounded-lg border bg-slate-50/50">
+                          <img 
+                            src={selectedOrderForVerification.payment_verification_url} 
+                            alt="Payment Screenshot" 
+                            className="w-full h-auto object-contain transition-transform duration-300 hover:scale-105 cursor-zoom-in"
+                            onClick={() => window.open(selectedOrderForVerification.payment_verification_url!, '_blank')}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => window.open(selectedOrderForVerification.payment_verification_url!, '_blank')}
+                            className="flex-1 transition-all duration-200 hover:scale-105"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Open Full Image
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              const img = new Image();
+                              img.src = selectedOrderForVerification.payment_verification_url!;
+                              img.onload = () => {
+                                window.open(selectedOrderForVerification.payment_verification_url!, '_blank');
+                              };
+                            }}
+                            className="flex-1 transition-all duration-200 hover:scale-105"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View in New Tab
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-3 bg-slate-50/50 rounded-lg border">
+                          <p className="text-sm font-medium mb-2">Bank Transfer Receipt URL:</p>
+                          <div className="max-h-20 overflow-y-auto p-2 bg-white rounded border">
+                            <a 
+                              href={selectedOrderForVerification.payment_verification_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline text-sm break-all transition-colors duration-200 hover:text-blue-700"
+                            >
+                              {selectedOrderForVerification.payment_verification_url}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => window.open(selectedOrderForVerification.payment_verification_url!, '_blank')}
+                            className="flex-1 transition-all duration-200 hover:scale-105"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Receipt
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedOrderForVerification.payment_verification_url!);
+                              alert('URL copied to clipboard!');
+                            }}
+                            className="flex-1 transition-all duration-200 hover:scale-105"
+                          >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy URL
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-6 text-center text-muted-foreground bg-slate-50/50 transition-all duration-300 hover:bg-slate-100/50">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-3 text-slate-400 transition-transform duration-300 hover:scale-110" />
+                    <p className="text-lg font-medium">No payment proof provided</p>
+                    <p className="text-sm mt-1">Customer did not upload any payment verification</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Verification Notes */}
+              <div>
+                <Label htmlFor="verificationNotes" className="text-sm font-medium mb-2 block">
+                  Verification Notes
+                </Label>
+                <Textarea
+                  id="verificationNotes"
+                  value={verificationNotes}
+                  onChange={(e) => setVerificationNotes(e.target.value)}
+                  placeholder="Add any notes about this payment verification..."
+                  rows={4}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  These notes will be saved with the order record
+                </p>
+              </div>
+
+              {/* Additional Order Details */}
+              <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-slate-50/50">
+                <div>
+                  <Label className="text-sm font-medium">Order Status</Label>
+                  <p className="font-semibold capitalize">{selectedOrderForVerification.status}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Payment Status</Label>
+                  <p className="font-semibold capitalize">{selectedOrderForVerification.payment_status}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Order Date</Label>
+                  <p className="font-semibold">
+                    {new Date(selectedOrderForVerification.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Verification Status</Label>
+                  <p className="font-semibold">
+                    {selectedOrderForVerification.payment_verified ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <CheckCircle className="h-4 w-4" />
+                        Verified
+                      </span>
+                    ) : (
+                      <span className="text-yellow-600 flex items-center gap-1">
+                        <AlertCircle className="h-4 w-4" />
+                        Pending Verification
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Verification Notes */}
-        <div>
-          <Label htmlFor="verificationNotes" className="text-sm font-medium mb-2 block">
-            Verification Notes
-          </Label>
-          <Textarea
-            id="verificationNotes"
-            value={verificationNotes}
-            onChange={(e) => setVerificationNotes(e.target.value)}
-            placeholder="Add any notes about this payment verification..."
-            rows={4}
-            className="resize-none"
-          />
-          <p className="text-xs text-muted-foreground mt-2">
-            These notes will be saved with the order record
-          </p>
-        </div>
-
-        {/* Additional Order Details */}
-        <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-slate-50/50">
-          <div>
-            <Label className="text-sm font-medium">Order Status</Label>
-            <p className="font-semibold capitalize">{selectedOrderForVerification.status}</p>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Payment Status</Label>
-            <p className="font-semibold capitalize">{selectedOrderForVerification.payment_status}</p>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Order Date</Label>
-            <p className="font-semibold">
-              {new Date(selectedOrderForVerification.created_at).toLocaleDateString()}
-            </p>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">Verification Status</Label>
-            <p className="font-semibold">
-              {selectedOrderForVerification.payment_verified ? (
-                <span className="text-green-600 flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4" />
-                  Verified
-                </span>
+          {/* Action Buttons - Fixed at bottom */}
+          <DialogFooter className="flex gap-3 pt-4 border-t mt-4 flex-shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowVerificationModal(false)
+                setSelectedOrderForVerification(null)
+                setVerificationNotes("")
+              }}
+              className="flex-1 transition-all duration-200 hover:scale-105"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (!selectedOrderForVerification) return;
+                setVerificationStatus('rejecting');
+                verifyPayment(selectedOrderForVerification.id, false, verificationNotes);
+              }}
+              disabled={verificationStatus === 'verifying' || verificationStatus === 'rejecting'}
+              className="flex-1 transition-all duration-200 hover:scale-105"
+            >
+              {verificationStatus === 'rejecting' ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Rejecting...
+                </>
               ) : (
-                <span className="text-yellow-600 flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  Pending Verification
-                </span>
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject Payment
+                </>
               )}
-            </p>
-          </div>
-        </div>
-      </div>
-    )}
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 bg-green-600 hover:bg-green-700 transition-all duration-200 hover:scale-105"
+              onClick={() => {
+                if (!selectedOrderForVerification) return;
+                setVerificationStatus('verifying');
+                verifyPayment(selectedOrderForVerification.id, true, verificationNotes);
+              }}
+              disabled={verificationStatus === 'verifying' || verificationStatus === 'rejecting'}
+            >
+              {verificationStatus === 'verifying' ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Verify Payment
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-    {/* Action Buttons - Fixed at bottom */}
-    <DialogFooter className="flex gap-3 pt-4 border-t mt-4 flex-shrink-0">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => {
-          setShowVerificationModal(false)
-          setSelectedOrderForVerification(null)
-          setVerificationNotes("")
-        }}
-        className="flex-1 transition-all duration-200 hover:scale-105"
-      >
-        Cancel
-      </Button>
-      <Button
-        type="button"
-        variant="destructive"
-        onClick={() => {
-          if (!selectedOrderForVerification) return;
-          setVerificationStatus('rejecting');
-          verifyPayment(selectedOrderForVerification.id, false, verificationNotes);
-        }}
-        disabled={verificationStatus === 'verifying' || verificationStatus === 'rejecting'}
-        className="flex-1 transition-all duration-200 hover:scale-105"
-      >
-        {verificationStatus === 'rejecting' ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            Rejecting...
-          </>
-        ) : (
-          <>
-            <XCircle className="h-4 w-4 mr-2" />
-            Reject Payment
-          </>
-        )}
-      </Button>
-      <Button
-        type="button"
-        className="flex-1 bg-green-600 hover:bg-green-700 transition-all duration-200 hover:scale-105"
-        onClick={() => {
-          if (!selectedOrderForVerification) return;
-          setVerificationStatus('verifying');
-          verifyPayment(selectedOrderForVerification.id, true, verificationNotes);
-        }}
-        disabled={verificationStatus === 'verifying' || verificationStatus === 'rejecting'}
-      >
-        {verificationStatus === 'verifying' ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            Verifying...
-          </>
-        ) : (
-          <>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Verify Payment
-          </>
-        )}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
       {/* Add Product Modal */}
       <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1912,289 +1952,290 @@ const openVerificationModal = (order: Order) => {
           />
         </DialogContent>
       </Dialog>
-{/* Add Feature Modal */}
-<Dialog open={showAddFeature} onOpenChange={setShowAddFeature}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle className="flex items-center gap-2">
-        <Plus className="h-5 w-5 text-[#0088CC]" />
-        Add Product Feature
-      </DialogTitle>
-      <DialogDescription>
-        Add a new feature for {selectedProductForFeature?.title}
-      </DialogDescription>
-    </DialogHeader>
-    
-    <form onSubmit={addProductFeature} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="featureTitle" className="text-sm font-medium">
-          Feature Title *
-        </Label>
-        <Input
-          id="featureTitle"
-          placeholder="e.g., Free Warranty, Hand-made, Fast Charging"
-          value={featureForm.title}
-          onChange={(e) => setFeatureForm(prev => ({ ...prev, title: e.target.value }))}
-          required
-        />
-        <p className="text-xs text-muted-foreground">
-          Short, descriptive title for the feature
-        </p>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="featureDescription" className="text-sm font-medium">
-          Description (Optional)
-        </Label>
-        <Textarea
-          id="featureDescription"
-          placeholder="Detailed description of this feature..."
-          value={featureForm.description}
-          onChange={(e) => setFeatureForm(prev => ({ ...prev, description: e.target.value }))}
-          rows={3}
-        />
-        <p className="text-xs text-muted-foreground">
-          Additional details about this feature
-        </p>
-      </div>
-
-      <div className="bg-slate-50 rounded-lg p-3 border">
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <CheckCircle className="h-4 w-4 text-green-500" />
-          <span>Preview:</span>
-        </div>
-        <div className="mt-2 p-2 bg-white rounded border">
-          <div className="flex items-start gap-2">
-            <div className="w-4 h-4 bg-[#0088CC] rounded-full flex items-center justify-center mt-1 flex-shrink-0">
-              <CheckCircle className="w-2 h-2 text-white" />
+      {/* Add Feature Modal */}
+      <Dialog open={showAddFeature} onOpenChange={setShowAddFeature}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-[#0088CC]" />
+              Add Product Feature
+            </DialogTitle>
+            <DialogDescription>
+              Add a new feature for {selectedProductForFeature?.title}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={addProductFeature} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="featureTitle" className="text-sm font-medium">
+                Feature Title *
+              </Label>
+              <Input
+                id="featureTitle"
+                placeholder="e.g., Free Warranty, Hand-made, Fast Charging"
+                value={featureForm.title}
+                onChange={(e) => setFeatureForm(prev => ({ ...prev, title: e.target.value }))}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Short, descriptive title for the feature
+              </p>
             </div>
-            <div>
-              <p className="font-medium text-sm">{featureForm.title || "Feature Title"}</p>
-              {featureForm.description && (
-                <p className="text-slate-600 text-xs mt-1">{featureForm.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <DialogFooter className="flex gap-2 pt-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setShowAddFeature(false)
-            setSelectedProductForFeature(null)
-            setFeatureForm({ title: "", description: "" })
-          }}
-          className="flex-1"
-        >
-          Cancel
-        </Button>
-        <Button 
-          type="submit" 
-          className="flex-1 bg-[#0088CC] hover:bg-[#0088CC]/90"
-          disabled={!featureForm.title.trim() || isSubmittingFeature}
-        >
-          {isSubmittingFeature ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Adding...
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Feature
-            </>
-          )}
-        </Button>
-      </DialogFooter>
-    </form>
-  </DialogContent>
-</Dialog>
-      {/* Edit Product Modal */}
-     {/* Edit Product Modal with Image Gallery */}
-<Dialog open={showEditProduct} onOpenChange={setShowEditProduct}>
-  <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Edit Product</DialogTitle>
-      <DialogDescription>
-        Update product information and manage images for {selectedProduct?.title}
-      </DialogDescription>
-    </DialogHeader>
-    
-    {selectedProduct && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column - Image Gallery Management */}
-        <div className="space-y-6">
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-[#0088CC]" />
-              Product Images & Gallery
-            </h3>
-            
-            {/* Current Main Images */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Current Main Images</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {selectedProduct.images?.map((image, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={image}
-                      alt={`${selectedProduct.title} - Image ${index + 1}`}
-                      className="w-full h-20 object-cover rounded-lg border"
-                    />
-                    <Badge className="absolute top-1 left-1 bg-black/70 text-white text-xs border-0">
-                      Main {index + 1}
-                    </Badge>
+            <div className="space-y-2">
+              <Label htmlFor="featureDescription" className="text-sm font-medium">
+                Description (Optional)
+              </Label>
+              <Textarea
+                id="featureDescription"
+                placeholder="Detailed description of this feature..."
+                value={featureForm.description}
+                onChange={(e) => setFeatureForm(prev => ({ ...prev, description: e.target.value }))}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Additional details about this feature
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-3 border">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span>Preview:</span>
+              </div>
+              <div className="mt-2 p-2 bg-white rounded border">
+                <div className="flex items-start gap-2">
+                  <div className="w-4 h-4 bg-[#0088CC] rounded-full flex items-center justify-center mt-1 flex-shrink-0">
+                    <CheckCircle className="w-2 h-2 text-white" />
                   </div>
-                ))}
+                  <div>
+                    <p className="font-medium text-sm">{featureForm.title || "Feature Title"}</p>
+                    {featureForm.description && (
+                      <p className="text-slate-600 text-xs mt-1">{featureForm.description}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Gallery Management Section */}
-            <Card className="border-2 border-dashed border-slate-200">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <Grid3X3 className="w-4 h-4 text-[#0088CC]" />
-                      Additional Gallery Images
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      Add different angles, colors, and lifestyle shots
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Select value={newImageType} onValueChange={(value: string) => setNewImageType(value)}>
-                      <SelectTrigger className="w-32 border-[#0088CC]">
-                        <SelectValue placeholder="Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="angle">Angle View</SelectItem>
-                        <SelectItem value="color">Color Variant</SelectItem>
-                        <SelectItem value="lifestyle">Lifestyle</SelectItem>
-                        <SelectItem value="detail">Close-up</SelectItem>
-                      </SelectContent>
-                    </Select>
+            <DialogFooter className="flex gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAddFeature(false)
+                  setSelectedProductForFeature(null)
+                  setFeatureForm({ title: "", description: "" })
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                className="flex-1 bg-[#0088CC] hover:bg-[#0088CC]/90"
+                disabled={!featureForm.title.trim() || isSubmittingFeature}
+              >
+                {isSubmittingFeature ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Feature
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-                    <div className="relative">
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleGalleryImageUpload}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        disabled={uploadingGallery}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={uploadingGallery}
-                        className="border-[#0088CC] text-[#0088CC] hover:bg-[#0088CC] hover:text-white"
-                      >
-                        {uploadingGallery ? (
-                          <>
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4 mr-2" />
-                            Add to Gallery
-                          </>
-                        )}
-                      </Button>
+      {/* Edit Product Modal with Image Gallery */}
+      <Dialog open={showEditProduct} onOpenChange={setShowEditProduct}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>
+              Update product information and manage images for {selectedProduct?.title}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedProduct && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column - Image Gallery Management */}
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-[#0088CC]" />
+                    Product Images & Gallery
+                  </h3>
+                  
+                  {/* Current Main Images */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Current Main Images</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {selectedProduct.images?.map((image, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={image}
+                            alt={`${selectedProduct.title} - Image ${index + 1}`}
+                            className="w-full h-20 object-cover rounded-lg border"
+                          />
+                          <Badge className="absolute top-1 left-1 bg-black/70 text-white text-xs border-0">
+                            Main {index + 1}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
 
-                {/* Gallery Images Grid */}
-                {galleryImages.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground border-2 border-dashed border-slate-200 rounded-lg">
-                    <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No gallery images yet</p>
-                    <p className="text-xs mt-1">Add images showing different angles and details</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-4 gap-2">
-                    {galleryImages.map((galleryImage) => (
-                      <div key={galleryImage.id} className="relative group">
-                        <img
-                          src={galleryImage.image_url}
-                          alt={galleryImage.alt_text}
-                          className="w-full h-20 object-cover rounded-lg border"
-                        />
-                        <Badge 
-                          variant="secondary" 
-                          className="absolute top-1 left-1 text-xs bg-black/70 text-white border-0"
-                        >
-                          {galleryImage.image_type}
-                        </Badge>
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                          <Select 
-                            value={galleryImage.image_type} 
-                            onValueChange={(value: string) => updateGalleryImageType(galleryImage.id, value)}
-                          >
-                            <SelectTrigger className="h-6 w-20 text-xs border-white/30 bg-black/80 text-white">
-                              <SelectValue />
+                  {/* Gallery Management Section */}
+                  <Card className="border-2 border-dashed border-slate-200">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="font-semibold flex items-center gap-2">
+                            <Grid3X3 className="w-4 h-4 text-[#0088CC]" />
+                            Additional Gallery Images
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            Add different angles, colors, and lifestyle shots
+                          </p>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <Select value={newImageType} onValueChange={(value: string) => setNewImageType(value)}>
+                            <SelectTrigger className="w-32 border-[#0088CC]">
+                              <SelectValue placeholder="Type" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="angle">Angle</SelectItem>
-                              <SelectItem value="color">Color</SelectItem>
+                              <SelectItem value="angle">Angle View</SelectItem>
+                              <SelectItem value="color">Color Variant</SelectItem>
                               <SelectItem value="lifestyle">Lifestyle</SelectItem>
-                              <SelectItem value="detail">Detail</SelectItem>
+                              <SelectItem value="detail">Close-up</SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteGalleryImage(galleryImage.id)}
-                            className="h-6 w-6 bg-red-500 hover:bg-red-600 text-white"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+
+                          <div className="relative">
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              onChange={handleGalleryImageUpload}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              disabled={uploadingGallery}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={uploadingGallery}
+                              className="border-[#0088CC] text-[#0088CC] hover:bg-[#0088CC] hover:text-white"
+                            >
+                              {uploadingGallery ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Add to Gallery
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                {/* Gallery Statistics */}
-                {galleryImages.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Gallery Summary:</span>
-                      <div className="flex gap-4">
-                        <span>Total: {galleryImages.length} images</span>
-                        <span>Angles: {galleryImages.filter(img => img.image_type === 'angle').length}</span>
-                        <span>Colors: {galleryImages.filter(img => img.image_type === 'color').length}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                      {/* Gallery Images Grid */}
+                      {galleryImages.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground border-2 border-dashed border-slate-200 rounded-lg">
+                          <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No gallery images yet</p>
+                          <p className="text-xs mt-1">Add images showing different angles and details</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-4 gap-2">
+                          {galleryImages.map((galleryImage) => (
+                            <div key={galleryImage.id} className="relative group">
+                              <img
+                                src={galleryImage.image_url}
+                                alt={galleryImage.alt_text}
+                                className="w-full h-20 object-cover rounded-lg border"
+                              />
+                              <Badge 
+                                variant="secondary" 
+                                className="absolute top-1 left-1 text-xs bg-black/70 text-white border-0"
+                              >
+                                {galleryImage.image_type}
+                              </Badge>
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                                <Select 
+                                  value={galleryImage.image_type} 
+                                  onValueChange={(value: string) => updateGalleryImageType(galleryImage.id, value)}
+                                >
+                                  <SelectTrigger className="h-6 w-20 text-xs border-white/30 bg-black/80 text-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="angle">Angle</SelectItem>
+                                    <SelectItem value="color">Color</SelectItem>
+                                    <SelectItem value="lifestyle">Lifestyle</SelectItem>
+                                    <SelectItem value="detail">Detail</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteGalleryImage(galleryImage.id)}
+                                  className="h-6 w-6 bg-red-500 hover:bg-red-600 text-white"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
-        {/* Right Column - Product Form */}
-        <div className="space-y-6">
-          <ProductForm
-            formData={productForm}
-            onFormChange={setProductForm}
-            productImages={productImages}
-            onImageUpload={handleImageUpload}
-            onSubmit={handleEditProduct}
-            isSubmitting={isSubmitting}
-            mode="edit"
-          />
-        </div>
-      </div>
-    )}
-  </DialogContent>
-</Dialog>
+                      {/* Gallery Statistics */}
+                      {galleryImages.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <span>Gallery Summary:</span>
+                            <div className="flex gap-4">
+                              <span>Total: {galleryImages.length} images</span>
+                              <span>Angles: {galleryImages.filter(img => img.image_type === 'angle').length}</span>
+                              <span>Colors: {galleryImages.filter(img => img.image_type === 'color').length}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Right Column - Product Form */}
+              <div className="space-y-6">
+                <ProductForm
+                  formData={productForm}
+                  onFormChange={setProductForm}
+                  productImages={productImages}
+                  onImageUpload={handleImageUpload}
+                  onSubmit={handleEditProduct}
+                  isSubmitting={isSubmitting}
+                  mode="edit"
+                />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
