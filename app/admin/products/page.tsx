@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Search, Edit, Trash2, Eye, Package } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Plus, Search, Edit, Trash2, Eye, Package, Filter, MoreHorizontal } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { AdminSidebar } from "@/components/admin-sidebar"
@@ -10,27 +10,173 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { products } from "@/lib/mock-data"
-import Link from "next/link"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/lib/auth-context"
+import { useRouter } from "next/navigation"
+
+interface Product {
+  id: number
+  title: string
+  description: string
+  price: number
+  original_price: number | null
+  category: string
+  subcategory: string | null
+  brand: string | null
+  stock_quantity: number
+  availability: 'in_stock' | 'out_of_stock' | 'pre_order'
+  images: string[]
+  featured: boolean
+  published: boolean
+  created_at: string
+  updated_at: string
+  rating: number
+  review_count: number
+}
 
 export default function AdminProductsPage() {
+  const { user, isLoading: authLoading } = useAuth()
+  const router = useRouter()
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
 
+  // Check if user is admin and redirect if not
+  useEffect(() => {
+    if (!authLoading && user && user.role !== 'admin') {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
+
+  // Fetch products data only if user is admin
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchProducts()
+    }
+  }, [user])
+
+  const fetchProducts = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem('token')
+      
+      const response = await fetch('/api/admin/products', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const productsData = await response.json()
+        setProducts(productsData)
+      } else {
+        console.error('Failed to fetch products')
+      }
+    } catch (error) {
+      console.error('Failed to fetch products:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         product.brand?.toLowerCase().includes(searchQuery.toLowerCase())
+    
     const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
+    
     return matchesSearch && matchesCategory
   })
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("ET", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "ETB",
+      currency: "USD",
     }).format(price)
   }
 
-  const categories = Array.from(new Set(products.map((p) => p.category)))
+  const categories = [...new Set(products.map(product => product.category))]
+
+  const openProductDetail = (product: Product) => {
+    // Use the same modal approach as your dashboard
+    // You'll need to implement this or redirect to product page
+    window.location.href = `/product/${product.id}`
+  }
+
+  const openEditProduct = (product: Product) => {
+    // Use the same modal approach as your dashboard  
+    // You'll need to implement this or redirect to edit page
+    window.location.href = `/admin/dashboard?editProduct=${product.id}`
+  }
+
+  const deleteProduct = async (productId: number) => {
+    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) return
+    
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/admin/products/${productId}`, {
+        method: 'DELETE',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        fetchProducts() // Refresh the list
+      } else {
+        console.error('Failed to delete product:', await response.text())
+      }
+    } catch (error) {
+      console.error('Failed to delete product:', error)
+    }
+  }
+
+  const getStatusVariant = (availability: string) => {
+    switch (availability) {
+      case 'in_stock':
+        return 'default'
+      case 'pre_order':
+        return 'secondary'
+      case 'out_of_stock':
+        return 'destructive'
+      default:
+        return 'outline'
+    }
+  }
+
+  // Show loading while checking authentication
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="grid lg:grid-cols-4 gap-8">
+            <div className="lg:col-span-1">
+              <AdminSidebar />
+            </div>
+            <div className="lg:col-span-3">
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading products...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
+
+  // If not admin, don't render anything (will redirect)
+  if (!user || user.role !== 'admin') {
+    return null
+  }
 
   return (
     <div className="min-h-screen">
@@ -48,12 +194,10 @@ export default function AdminProductsPage() {
                   <h1 className="text-3xl font-bold">Product Management</h1>
                   <p className="text-muted-foreground">Manage your product catalog</p>
                 </div>
-                <Link href="/admin/products/new">
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Product
-                  </Button>
-                </Link>
+                <Button onClick={() => router.push('/admin/dashboard')}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Product
+                </Button>
               </div>
 
               {/* Filters */}
@@ -102,13 +246,15 @@ export default function AdminProductsPage() {
                           <tr key={product.id} className="border-b hover:bg-muted/50">
                             <td className="p-4">
                               <div className="flex items-center space-x-3">
-                                <img
-                                  src={product.images[0] || "/placeholder.svg"}
-                                  alt={product.name}
-                                  className="w-12 h-12 object-cover rounded-lg"
-                                />
+                                {product.images && product.images[0] && (
+                                  <img
+                                    src={product.images[0]}
+                                    alt={product.title}
+                                    className="w-12 h-12 object-cover rounded-lg"
+                                  />
+                                )}
                                 <div>
-                                  <p className="font-medium">{product.name}</p>
+                                  <p className="font-medium">{product.title}</p>
                                   <p className="text-sm text-muted-foreground line-clamp-1">{product.description}</p>
                                 </div>
                               </div>
@@ -128,33 +274,42 @@ export default function AdminProductsPage() {
                             </td>
                             <td className="p-4">
                               <div>
-                                <p className="font-medium">{product.stockCount}</p>
+                                <p className="font-medium">{product.stock_quantity}</p>
                                 <p className="text-sm text-muted-foreground">
-                                  {product.inStock ? "In Stock" : "Out of Stock"}
+                                  {product.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
                                 </p>
                               </div>
                             </td>
                             <td className="p-4">
-                              <Badge className={product.inStock ? "bg-green-500" : "bg-red-500"}>
-                                {product.inStock ? "Active" : "Inactive"}
+                              <Badge variant={getStatusVariant(product.availability)}>
+                                {product.availability.replace('_', ' ')}
                               </Badge>
                             </td>
                             <td className="p-4">
-                              <div className="flex items-center space-x-2">
-                                <Link href={`/product/${product.id}`}>
-                                  <Button variant="ghost" size="sm">
-                                    <Eye className="w-4 h-4" />
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="w-4 h-4" />
                                   </Button>
-                                </Link>
-                                <Link href={`/admin/products/${product.id}/edit`}>
-                                  <Button variant="ghost" size="sm">
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                </Link>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuItem onClick={() => openProductDetail(product)}>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openEditProduct(product)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit Product
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    className="text-red-600 focus:text-red-600"
+                                    onClick={() => deleteProduct(product.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete Product
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         ))}
@@ -174,9 +329,9 @@ export default function AdminProductsPage() {
                         ? "Try adjusting your search or filter criteria."
                         : "Get started by adding your first product."}
                     </p>
-                    <Link href="/admin/products/new">
-                      <Button>Add Product</Button>
-                    </Link>
+                    <Button onClick={() => router.push('/admin/dashboard')}>
+                      Add Product
+                    </Button>
                   </CardContent>
                 </Card>
               )}
