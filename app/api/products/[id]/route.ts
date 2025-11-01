@@ -40,19 +40,44 @@ export async function GET(
       }
     }
 
-    // Handle base64 images and ensure all images are properly formatted
+    // Process images to handle base64 and invalid URLs
     const processedImages = images.map(img => {
-      // If it's already a base64 image or valid URL, return as is
-      if (img.startsWith('data:image/') || img.startsWith('http') || img.startsWith('/')) {
+      if (!img || typeof img !== 'string') {
+        return '/api/placeholder/400/400?text=Product+Image'
+      }
+
+      // Check if it's a valid base64 image (starts with data:image/)
+      if (img.startsWith('data:image/')) {
+        // Validate base64 format
+        try {
+          // Simple validation - check if it has proper format and reasonable length
+          const base64Parts = img.split(',')
+          if (base64Parts.length === 2 && base64Parts[1].length > 100) {
+            return img
+          } else {
+            console.warn('Invalid base64 image format for product:', productId)
+            return '/api/placeholder/400/400?text=Invalid+Image'
+          }
+        } catch (error) {
+          console.warn('Error processing base64 image for product:', productId, error)
+          return '/api/placeholder/400/400?text=Invalid+Image'
+        }
+      }
+      
+      // Check if it's a valid URL (http, https, or relative path)
+      if (img.startsWith('http') || img.startsWith('/')) {
         return img
       }
-      // If it's a base64 string without data prefix, add it
-      if (img.length > 100 && !img.includes(' ')) { // Likely base64
-        return `data:image/jpeg;base64,${img}`
+      
+      // If it's a long string that might be corrupted base64, use placeholder
+      if (img.length > 1000) {
+        console.warn('Long string detected, likely corrupted base64 for product:', productId)
+        return '/api/placeholder/400/400?text=Corrupted+Image'
       }
+      
       // Fallback to placeholder
-      return '/api/placeholder/400/400?text=Product'
-    })
+      return '/api/placeholder/400/400?text=Product+Image'
+    }).filter(img => img !== null && img !== undefined)
 
     // Parse tags safely
     let tags: string[] = []
@@ -97,6 +122,47 @@ export async function GET(
       { error: 'Failed to fetch product' },
       { status: 500 }
     )
+  }
+}
+
+// Emergency Fix: Also update your gallery route to prevent base64 corruption
+// Add this function to clean up corrupted base64 images
+async function cleanupCorruptedImages() {
+  try {
+    // Get all products with potentially corrupted images
+    const [products] = await pool.execute(
+      'SELECT id, images FROM products WHERE images LIKE "%data:image/%"'
+    )
+    
+    for (const product of products as any[]) {
+      let images: string[] = []
+      try {
+        if (typeof product.images === 'string') {
+          const parsed = JSON.parse(product.images)
+          images = Array.isArray(parsed) ? parsed : [parsed].filter(Boolean)
+        } else if (Array.isArray(product.images)) {
+          images = product.images
+        }
+      } catch {
+        continue
+      }
+      
+      const cleanedImages = images.map(img => {
+        if (img && img.startsWith('data:image/') && img.includes('...')) {
+          // This is a truncated base64 image, replace with placeholder
+          return '/api/placeholder/400/400?text=Image+Removed'
+        }
+        return img
+      })
+      
+      // Update the product with cleaned images
+      await pool.execute(
+        'UPDATE products SET images = ? WHERE id = ?',
+        [JSON.stringify(cleanedImages), product.id]
+      )
+    }
+  } catch (error) {
+    console.error('Error cleaning corrupted images:', error)
   }
 }
 

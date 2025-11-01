@@ -2,43 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import pool from '@/lib/db'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: productId } = await params
 
-    console.log('🖼️ Fetching gallery for product:', productId)
+import { put } from '@vercel/blob'
 
-    const [images] = await pool.execute(
-      `SELECT id, product_id, image_url, alt_text, sort_order, image_type, created_at 
-       FROM product_gallery 
-       WHERE product_id = ? 
-       ORDER BY sort_order ASC, created_at ASC`,
-      [productId]
-    )
-
-    const imagesArray = Array.isArray(images) ? images : []
-    console.log('✅ Gallery images fetched:', imagesArray.length)
-
-    return NextResponse.json({
-      success: true,
-      images: imagesArray
-    })
-
-  } catch (error) {
-    console.error('❌ Error fetching product gallery:', error)
-    return NextResponse.json(
-      { 
-        success: false,
-        error: 'Failed to fetch product gallery',
-        images: [] 
-      },
-      { status: 500 }
-    )
-  }
-}
+// ... other imports and GET function ...
 
 export async function POST(
   request: NextRequest,
@@ -103,12 +70,12 @@ export async function POST(
       )
     }
 
-    // Check file sizes (limit to 2MB per image)
-    const maxSize = 2 * 1024 * 1024; // 2MB
+    // Check file sizes (limit to 4MB per image for Vercel Blob)
+    const maxSize = 4 * 1024 * 1024; // 4MB
     const oversizedImages = validImages.filter(img => img.size > maxSize)
     if (oversizedImages.length > 0) {
       return NextResponse.json({ 
-        error: `Some images exceed 2MB limit: ${oversizedImages.map(img => img.name).join(', ')}` 
+        error: `Some images exceed 4MB limit: ${oversizedImages.map(img => img.name).join(', ')}` 
       }, { status: 400 })
     }
 
@@ -131,19 +98,25 @@ export async function POST(
       for (let i = 0; i < validImages.length; i++) {
         const image = validImages[i]
         
-        // Convert image to base64 for database storage
-        const bytes = await image.arrayBuffer()
-        const buffer = Buffer.from(bytes)
-        const base64Image = `data:${image.type};base64,${buffer.toString('base64')}`
+        // Generate unique filename
+        const timestamp = Date.now()
+        const randomString = Math.random().toString(36).substring(2, 15)
+        const fileExtension = image.name.split('.').pop() || 'jpg'
+        const fileName = `gallery-${productId}-${timestamp}-${randomString}.${fileExtension}`
 
-        console.log(`🖼️ Inserting gallery image ${i + 1}:`, image.name, `Size: ${image.size} bytes`)
+        // Upload to Vercel Blob Storage
+        const blob = await put(`products/${productId}/gallery/${fileName}`, image, {
+          access: 'public',
+        })
+
+        console.log(`🖼️ Uploaded gallery image ${i + 1} to Vercel Blob:`, blob.url)
 
         const [result] = await connection.execute(
           `INSERT INTO product_gallery (product_id, image_url, alt_text, sort_order, image_type) 
            VALUES (?, ?, ?, ?, ?)`,
           [
             productId, 
-            base64Image, 
+            blob.url, 
             `${product.title} - ${imageType} view ${i + 1}`, 
             maxOrder + i + 1,
             imageType
@@ -155,7 +128,7 @@ export async function POST(
         results.push({
           id: insertedId,
           product_id: parseInt(productId),
-          image_url: base64Image,
+          image_url: blob.url,
           alt_text: `${product.title} - ${imageType} view ${i + 1}`,
           sort_order: maxOrder + i + 1,
           image_type: imageType,
@@ -170,7 +143,7 @@ export async function POST(
         success: true,
         message: `${results.length} image(s) added to gallery successfully`,
         uploaded: results,
-        images: results // Also return as images for immediate frontend update
+        images: results
       })
 
     } catch (transactionError) {
@@ -199,6 +172,7 @@ export async function POST(
   }
 }
 
+// ... keep the existing PATCH and DELETE functions ...
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; imageId: string }> }

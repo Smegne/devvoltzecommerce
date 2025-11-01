@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { put } from '@vercel/blob'
 
 export async function POST(
   request: NextRequest,
@@ -38,12 +39,12 @@ export async function POST(
       return NextResponse.json({ error: 'No images provided' }, { status: 400 })
     }
 
-    // Check file sizes (limit to 2MB per image)
-    const maxSize = 2 * 1024 * 1024; // 2MB
+    // Check file sizes (limit to 4MB per image for Vercel Blob)
+    const maxSize = 4 * 1024 * 1024; // 4MB
     const oversizedImages = images.filter(img => img.size > maxSize)
     if (oversizedImages.length > 0) {
       return NextResponse.json({ 
-        error: `Some images exceed 2MB limit: ${oversizedImages.map(img => img.name).join(', ')}` 
+        error: `Some images exceed 4MB limit: ${oversizedImages.map(img => img.name).join(', ')}` 
       }, { status: 400 })
     }
 
@@ -53,12 +54,19 @@ export async function POST(
       const image = images[i]
       if (image.size === 0 || !image.type.startsWith('image/')) continue
 
-      // Convert image to base64 for database storage
-      const bytes = await image.arrayBuffer()
-      const buffer = Buffer.from(bytes)
-      const base64Image = `data:${image.type};base64,${buffer.toString('base64')}`
-      
-      uploadedImageUrls.push(base64Image)
+      // Generate unique filename
+      const timestamp = Date.now()
+      const randomString = Math.random().toString(36).substring(2, 15)
+      const fileExtension = image.name.split('.').pop() || 'jpg'
+      const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
+
+      // Upload to Vercel Blob Storage
+      const blob = await put(`products/${productId}/${fileName}`, image, {
+        access: 'public',
+      })
+
+      console.log('✅ Image uploaded to Vercel Blob:', blob.url)
+      uploadedImageUrls.push(blob.url)
     }
 
     if (uploadedImageUrls.length === 0) {
