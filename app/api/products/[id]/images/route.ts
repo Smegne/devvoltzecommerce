@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
-import { existsSync } from 'fs'
 
 export async function POST(
   request: NextRequest,
@@ -41,10 +38,13 @@ export async function POST(
       return NextResponse.json({ error: 'No images provided' }, { status: 400 })
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products', 'main')
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
+    // Check file sizes (limit to 2MB per image)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    const oversizedImages = images.filter(img => img.size > maxSize)
+    if (oversizedImages.length > 0) {
+      return NextResponse.json({ 
+        error: `Some images exceed 2MB limit: ${oversizedImages.map(img => img.name).join(', ')}` 
+      }, { status: 400 })
     }
 
     const uploadedImageUrls: string[] = []
@@ -53,21 +53,12 @@ export async function POST(
       const image = images[i]
       if (image.size === 0 || !image.type.startsWith('image/')) continue
 
-      // Generate unique filename
-      const timestamp = Date.now()
-      const randomString = Math.random().toString(36).substring(2, 15)
-      const fileExtension = image.name.split('.').pop() || 'jpg'
-      const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
-      const filePath = path.join(uploadDir, fileName)
-
-      // Convert File to Buffer and save
+      // Convert image to base64 for database storage
       const bytes = await image.arrayBuffer()
       const buffer = Buffer.from(bytes)
-      await writeFile(filePath, buffer)
-
-      // Create URL for frontend access
-      const imageUrl = `/uploads/products/main/${fileName}`
-      uploadedImageUrls.push(imageUrl)
+      const base64Image = `data:${image.type};base64,${buffer.toString('base64')}`
+      
+      uploadedImageUrls.push(base64Image)
     }
 
     if (uploadedImageUrls.length === 0) {

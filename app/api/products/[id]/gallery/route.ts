@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import pool from '@/lib/db'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
-import { existsSync } from 'fs'
 
 export async function GET(
   request: NextRequest,
@@ -25,15 +22,9 @@ export async function GET(
     const imagesArray = Array.isArray(images) ? images : []
     console.log('✅ Gallery images fetched:', imagesArray.length)
 
-    // Ensure all image URLs are properly formatted
-    const formattedImages = imagesArray.map((img: any) => ({
-      ...img,
-      image_url: img.image_url || `/api/placeholder/400/400?text=Gallery+Image`
-    }))
-
     return NextResponse.json({
       success: true,
-      images: formattedImages
+      images: imagesArray
     })
 
   } catch (error) {
@@ -97,12 +88,6 @@ export async function POST(
       )
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products', 'gallery')
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
-
     // Validate files
     const validImages = images.filter(img => 
       img instanceof File && 
@@ -116,6 +101,15 @@ export async function POST(
         { error: 'No valid image files provided' },
         { status: 400 }
       )
+    }
+
+    // Check file sizes (limit to 2MB per image)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    const oversizedImages = validImages.filter(img => img.size > maxSize)
+    if (oversizedImages.length > 0) {
+      return NextResponse.json({ 
+        error: `Some images exceed 2MB limit: ${oversizedImages.map(img => img.name).join(', ')}` 
+      }, { status: 400 })
     }
 
     console.log('✅ Valid images:', validImages.length)
@@ -137,29 +131,19 @@ export async function POST(
       for (let i = 0; i < validImages.length; i++) {
         const image = validImages[i]
         
-        // Generate unique filename and save file
-        const timestamp = Date.now()
-        const randomString = Math.random().toString(36).substring(2, 15)
-        const fileExtension = image.name.split('.').pop() || 'jpg'
-        const fileName = `gallery-${productId}-${timestamp}-${randomString}.${fileExtension}`
-        const filePath = path.join(uploadDir, fileName)
-
-        // Convert File to Buffer and save
+        // Convert image to base64 for database storage
         const bytes = await image.arrayBuffer()
         const buffer = Buffer.from(bytes)
-        await writeFile(filePath, buffer)
+        const base64Image = `data:${image.type};base64,${buffer.toString('base64')}`
 
-        // Create URL for frontend access
-        const imageUrl = `/uploads/products/gallery/${fileName}`
-
-        console.log(`🖼️ Inserting gallery image ${i + 1}:`, image.name)
+        console.log(`🖼️ Inserting gallery image ${i + 1}:`, image.name, `Size: ${image.size} bytes`)
 
         const [result] = await connection.execute(
           `INSERT INTO product_gallery (product_id, image_url, alt_text, sort_order, image_type) 
            VALUES (?, ?, ?, ?, ?)`,
           [
             productId, 
-            imageUrl, 
+            base64Image, 
             `${product.title} - ${imageType} view ${i + 1}`, 
             maxOrder + i + 1,
             imageType
@@ -171,7 +155,7 @@ export async function POST(
         results.push({
           id: insertedId,
           product_id: parseInt(productId),
-          image_url: imageUrl,
+          image_url: base64Image,
           alt_text: `${product.title} - ${imageType} view ${i + 1}`,
           sort_order: maxOrder + i + 1,
           image_type: imageType,
