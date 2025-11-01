@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { writeFile, mkdir } from 'fs/promises'
+import path from 'path'
+import { existsSync } from 'fs'
 
 export async function POST(
   request: NextRequest,
@@ -38,17 +41,32 @@ export async function POST(
       return NextResponse.json({ error: 'No images provided' }, { status: 400 })
     }
 
-    // For now, use placeholder URLs to avoid file system issues
+    // Create uploads directory if it doesn't exist
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products', 'main')
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true })
+    }
+
     const uploadedImageUrls: string[] = []
 
     for (let i = 0; i < images.length; i++) {
       const image = images[i]
       if (image.size === 0 || !image.type.startsWith('image/')) continue
 
-      // Create placeholder URL
-      const productName = encodeURIComponent(product.title || 'Product')
-      const imageUrl = `/api/placeholder/600/600?text=${productName}+${i+1}&bg=10B981&color=ffffff`
-      
+      // Generate unique filename
+      const timestamp = Date.now()
+      const randomString = Math.random().toString(36).substring(2, 15)
+      const fileExtension = image.name.split('.').pop() || 'jpg'
+      const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
+      const filePath = path.join(uploadDir, fileName)
+
+      // Convert File to Buffer and save
+      const bytes = await image.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      await writeFile(filePath, buffer)
+
+      // Create URL for frontend access
+      const imageUrl = `/uploads/products/main/${fileName}`
       uploadedImageUrls.push(imageUrl)
     }
 
