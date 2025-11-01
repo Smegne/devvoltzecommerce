@@ -235,6 +235,36 @@ const [galleryImages, setGalleryImages] = useState<any[]>([])
 const [uploadingGallery, setUploadingGallery] = useState(false)
 const [newImageType, setNewImageType] = useState('angle')
 
+
+  
+  // Add this function near your other utility functions
+const validateAndFormatProducts = (products: any[]): Product[] => {
+  if (!Array.isArray(products)) {
+    console.error('❌ Products data is not an array:', products)
+    return []
+  }
+
+  return products.map(product => ({
+    id: Number(product.id) || 0,
+    title: String(product.title || 'Untitled Product'),
+    description: String(product.description || ''),
+    price: Number(product.price) || 0,
+    original_price: product.original_price ? Number(product.original_price) : null,
+    category: String(product.category || 'Uncategorized'),
+    subcategory: product.subcategory ? String(product.subcategory) : null,
+    brand: product.brand ? String(product.brand) : null,
+    stock_quantity: Number(product.stock_quantity) || 0,
+    availability: (product.availability as 'in_stock' | 'out_of_stock' | 'pre_order') || 'in_stock',
+    images: Array.isArray(product.images) ? product.images : 
+            typeof product.images === 'string' ? JSON.parse(product.images || '[]') : [],
+    featured: Boolean(product.featured),
+    published: Boolean(product.published !== false),
+    created_at: String(product.created_at || new Date().toISOString()),
+    updated_at: String(product.updated_at || new Date().toISOString()),
+    rating: Number(product.rating) || 4.5,
+    review_count: Number(product.review_count) || 0
+  }))
+}
 // Add these functions
 const fetchGalleryImages = async (productId: number) => {
   try {
@@ -411,66 +441,99 @@ const handleDeleteClick = (productId: number, e: React.MouseEvent) => {
   }, [user])
 
   const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true)
-      const token = localStorage.getItem('token')
+  try {
+    setIsLoading(true)
+    const token = localStorage.getItem('token')
+    
+    const [productsRes, usersRes, ordersRes, statsRes] = await Promise.all([
+      fetch('/api/admin/products', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }),
+      fetch('/api/admin/users', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }),
+      fetch('/api/admin/orders', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }),
+      fetch('/api/admin/stats', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    ])
+
+    // Safe products handling
+    if (productsRes.ok) {
+      const productsData = await productsRes.json()
+      console.log('📦 Raw products data:', productsData)
       
-      const [productsRes, usersRes, ordersRes, statsRes] = await Promise.all([
-        fetch('/api/admin/products', {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }),
-        fetch('/api/admin/users', {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }),
-        fetch('/api/admin/orders', {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }),
-        fetch('/api/admin/stats', {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-      ])
-
-      if (productsRes.ok) {
-        const productsData = await productsRes.json()
-        setProducts(productsData)
-      }
-
-      if (usersRes.ok) {
-        const usersData = await usersRes.json()
-        setUsers(usersData)
-      }
-
-      if (ordersRes.ok) {
-        const ordersData = await ordersRes.json()
-        setOrders(ordersData)
-      }
-
-      if (statsRes.ok) {
-        const statsData = await statsRes.json()
-        setStats(statsData)
-      } else {
-        calculateLocalStats()
-      }
-
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error)
-      calculateLocalStats()
-    } finally {
-      setIsLoading(false)
+      // Handle both array and object responses
+      const productsArray = Array.isArray(productsData) ? productsData : 
+                           productsData.products ? productsData.products : 
+                           productsData.data ? productsData.data : []
+      
+      const validatedProducts = validateAndFormatProducts(productsArray)
+      console.log('✅ Validated products:', validatedProducts)
+      setProducts(validatedProducts)
+    } else {
+      console.error('❌ Products fetch failed:', productsRes.status)
+      setProducts([])
     }
+
+    // Safe users handling
+    if (usersRes.ok) {
+      const usersData = await usersRes.json()
+      const usersArray = Array.isArray(usersData) ? usersData : 
+                        usersData.users ? usersData.users : 
+                        usersData.data ? usersData.data : []
+      setUsers(usersArray)
+    } else {
+      console.error('❌ Users fetch failed:', usersRes.status)
+      setUsers([])
+    }
+
+    // Safe orders handling
+    if (ordersRes.ok) {
+      const ordersData = await ordersRes.json()
+      const ordersArray = Array.isArray(ordersData) ? ordersData : 
+                         ordersData.orders ? ordersData.orders : 
+                         ordersData.data ? ordersData.data : []
+      setOrders(ordersArray)
+    } else {
+      console.error('❌ Orders fetch failed:', ordersRes.status)
+      setOrders([])
+    }
+
+    // Safe stats handling
+    if (statsRes.ok) {
+      const statsData = await statsRes.json()
+      setStats(statsData)
+    } else {
+      console.error('❌ Stats fetch failed, calculating locally')
+      calculateLocalStats()
+    }
+
+  } catch (error) {
+    console.error('❌ Failed to fetch dashboard data:', error)
+    // Set empty arrays to prevent runtime errors
+    setProducts([])
+    setUsers([])
+    setOrders([])
+    calculateLocalStats()
+  } finally {
+    setIsLoading(false)
   }
+}
 
 const verifyPayment = async (orderId: number, verified: boolean, notes?: string) => {
   try {

@@ -39,10 +39,64 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Products fetched successfully, count:', (products as any[]).length)
     
-    return NextResponse.json(products)
+    // FIX: Ensure we always return a consistent array format
+    const productsArray = Array.isArray(products) ? products : []
+    
+    // FIX: Format products with proper image handling
+    const formattedProducts = productsArray.map((product: any) => {
+      // Handle images - ensure it's always an array
+      let images: string[] = []
+      try {
+        if (typeof product.images === 'string') {
+          images = JSON.parse(product.images)
+        } else if (Array.isArray(product.images)) {
+          images = product.images
+        }
+      } catch (error) {
+        console.error('❌ Error parsing images for product:', product.id, error)
+        images = []
+      }
+      
+      // Ensure images is always an array
+      if (!Array.isArray(images)) {
+        images = []
+      }
+      
+      // Add placeholder if no images
+      if (images.length === 0) {
+        images = ['/api/placeholder/400/400?text=No+Image']
+      }
+
+      return {
+        id: product.id,
+        title: product.title || 'Untitled Product',
+        description: product.description || '',
+        price: parseFloat(product.price) || 0,
+        original_price: product.original_price ? parseFloat(product.original_price) : null,
+        category: product.category || 'Uncategorized',
+        subcategory: product.subcategory || null,
+        brand: product.brand || null,
+        stock_quantity: parseInt(product.stock_quantity) || 0,
+        availability: product.availability || 'in_stock',
+        images: images,
+        featured: Boolean(product.featured),
+        published: Boolean(product.published !== false),
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+        rating: parseFloat(product.rating) || 4.5,
+        review_count: parseInt(product.review_count) || 0
+      }
+    })
+
+    console.log('✅ Formatted products count:', formattedProducts.length)
+    
+    // FIX: Return as array directly (not wrapped in object)
+    return NextResponse.json(formattedProducts)
+
   } catch (error) {
     console.error('❌ Failed to fetch products:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    // FIX: Return empty array on error to prevent frontend crashes
+    return NextResponse.json([], { status: 500 })
   }
 }
 
@@ -176,6 +230,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // FIX: Return consistent success response
     return NextResponse.json({ 
       success: true, 
       productId,
@@ -184,6 +239,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Failed to create product:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      success: false 
+    }, { status: 500 })
   }
 }
