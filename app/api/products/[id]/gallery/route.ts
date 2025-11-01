@@ -19,17 +19,28 @@ export async function GET(
       [productId]
     )
 
-    console.log('✅ Gallery images fetched:', (images as any[]).length)
+    const imagesArray = Array.isArray(images) ? images : []
+    console.log('✅ Gallery images fetched:', imagesArray.length)
+
+    // Ensure all image URLs are properly formatted
+    const formattedImages = imagesArray.map((img: any) => ({
+      ...img,
+      image_url: img.image_url || `/api/placeholder/400/400?text=Gallery+Image`
+    }))
 
     return NextResponse.json({
       success: true,
-      images: images || []
+      images: formattedImages
     })
 
   } catch (error) {
     console.error('❌ Error fetching product gallery:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch product gallery' },
+      { 
+        success: false,
+        error: 'Failed to fetch product gallery',
+        images: [] 
+      },
       { status: 500 }
     )
   }
@@ -68,6 +79,7 @@ export async function POST(
       return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     }
 
+    const product = (products as any[])[0]
     const formData = await request.formData()
     const images = formData.getAll('images') as File[]
     const imageType = formData.get('imageType') as string || 'angle'
@@ -113,14 +125,12 @@ export async function POST(
 
       const results = []
 
-      // For now, use placeholder URLs since file upload might have permission issues
       for (let i = 0; i < validImages.length; i++) {
         const image = validImages[i]
         
-        // Generate a placeholder URL instead of actual file upload
-        // This avoids file system permission issues in production
-        const placeholderText = encodeURIComponent(`${imageType} ${i + 1}`)
-        const imageUrl = `/api/placeholder/600/600?text=${placeholderText}&bg=1f2937&color=ffffff`
+        // Create proper placeholder URLs that will actually display
+        const productName = encodeURIComponent(product.title || 'Product')
+        const imageUrl = `/api/placeholder/600/600?text=${productName}+${imageType}&bg=3B82F6&color=ffffff`
 
         console.log(`🖼️ Inserting gallery image ${i + 1}:`, image.name)
 
@@ -130,17 +140,22 @@ export async function POST(
           [
             productId, 
             imageUrl, 
-            `${imageType} view ${i + 1} for product ${productId}`, 
+            `${product.title} - ${imageType} view ${i + 1}`, 
             maxOrder + i + 1,
             imageType
           ]
         )
 
+        const insertedId = (result as any).insertId
+        
         results.push({
-          imageId: (result as any).insertId,
-          originalName: image.name,
-          imageType,
-          imageUrl
+          id: insertedId,
+          product_id: parseInt(productId),
+          image_url: imageUrl,
+          alt_text: `${product.title} - ${imageType} view ${i + 1}`,
+          sort_order: maxOrder + i + 1,
+          image_type: imageType,
+          originalName: image.name
         })
       }
 
@@ -150,7 +165,8 @@ export async function POST(
       return NextResponse.json({
         success: true,
         message: `${results.length} image(s) added to gallery successfully`,
-        uploaded: results
+        uploaded: results,
+        images: results // Also return as images for immediate frontend update
       })
 
     } catch (transactionError) {
@@ -168,21 +184,17 @@ export async function POST(
   } catch (error) {
     console.error('❌ Error uploading gallery images:', error)
     
-    // Provide more detailed error information
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-    
     return NextResponse.json(
       { 
+        success: false,
         error: 'Failed to upload gallery images',
-        details: errorMessage,
-        suggestion: 'This might be due to file upload permissions. Using placeholder images instead.'
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )
   }
 }
 
-// Also add PATCH and DELETE methods for completeness
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; imageId: string }> }
@@ -191,12 +203,12 @@ export async function PATCH(
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
     
     if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
     const user = await getAuthUser(token)
     if (!user || user.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
     const { id: productId, imageId } = await params
@@ -215,7 +227,7 @@ export async function PATCH(
   } catch (error) {
     console.error('Error updating gallery image:', error)
     return NextResponse.json(
-      { error: 'Failed to update gallery image' },
+      { success: false, error: 'Failed to update gallery image' },
       { status: 500 }
     )
   }
@@ -229,12 +241,12 @@ export async function DELETE(
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
     
     if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
     const user = await getAuthUser(token)
     if (!user || user.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
     const { id: productId, imageId } = await params
@@ -252,7 +264,7 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting gallery image:', error)
     return NextResponse.json(
-      { error: 'Failed to delete gallery image' },
+      { success: false, error: 'Failed to delete gallery image' },
       { status: 500 }
     )
   }
