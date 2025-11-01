@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Edit, Trash2, Eye, Package, Filter, MoreHorizontal } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Eye, Package, Filter, MoreHorizontal, RefreshCw } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { AdminSidebar } from "@/components/admin-sidebar"
@@ -40,6 +40,7 @@ export default function AdminProductsPage() {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
 
@@ -60,8 +61,14 @@ export default function AdminProductsPage() {
   const fetchProducts = async () => {
     try {
       setIsLoading(true)
+      setError(null)
       const token = localStorage.getItem('token')
       
+      if (!token) {
+        setError('Authentication required. Please log in again.')
+        return
+      }
+
       const response = await fetch('/api/admin/products', {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -73,10 +80,12 @@ export default function AdminProductsPage() {
         const productsData = await response.json()
         setProducts(productsData)
       } else {
-        console.error('Failed to fetch products')
+        const errorText = await response.text()
+        setError(`Failed to load products: ${response.status} ${errorText}`)
       }
     } catch (error) {
       console.error('Failed to fetch products:', error)
+      setError('Failed to load products. Please check your connection and try again.')
     } finally {
       setIsLoading(false)
     }
@@ -103,15 +112,11 @@ export default function AdminProductsPage() {
   const categories = [...new Set(products.map(product => product.category))]
 
   const openProductDetail = (product: Product) => {
-    // Use the same modal approach as your dashboard
-    // You'll need to implement this or redirect to product page
-    window.location.href = `/product/${product.id}`
+    window.open(`/product/${product.id}`, '_blank')
   }
 
   const openEditProduct = (product: Product) => {
-    // Use the same modal approach as your dashboard  
-    // You'll need to implement this or redirect to edit page
-    window.location.href = `/admin/dashboard?editProduct=${product.id}`
+    router.push(`/admin/dashboard`)
   }
 
   const deleteProduct = async (productId: number) => {
@@ -130,10 +135,12 @@ export default function AdminProductsPage() {
       if (response.ok) {
         fetchProducts() // Refresh the list
       } else {
-        console.error('Failed to delete product:', await response.text())
+        const errorText = await response.text()
+        alert(`Failed to delete product: ${errorText}`)
       }
     } catch (error) {
       console.error('Failed to delete product:', error)
+      alert('Failed to delete product. Please try again.')
     }
   }
 
@@ -151,7 +158,7 @@ export default function AdminProductsPage() {
   }
 
   // Show loading while checking authentication
-  if (authLoading || isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen">
         <Navigation />
@@ -163,7 +170,7 @@ export default function AdminProductsPage() {
             <div className="lg:col-span-3">
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading products...</p>
+                <p className="text-muted-foreground">Checking authorization...</p>
               </div>
             </div>
           </div>
@@ -194,11 +201,30 @@ export default function AdminProductsPage() {
                   <h1 className="text-3xl font-bold">Product Management</h1>
                   <p className="text-muted-foreground">Manage your product catalog</p>
                 </div>
-                <Button onClick={() => router.push('/admin/dashboard')}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Product
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={fetchProducts} disabled={isLoading}>
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button onClick={() => router.push('/admin/dashboard')}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Product
+                  </Button>
+                </div>
               </div>
+
+              {error && (
+                <Card className="border-red-200 bg-red-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-red-700">{error}</p>
+                      <Button variant="outline" size="sm" onClick={fetchProducts}>
+                        Retry
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Filters */}
               <div className="flex flex-col sm:flex-row gap-4">
@@ -229,112 +255,117 @@ export default function AdminProductsPage() {
               {/* Products Table */}
               <Card>
                 <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="border-b">
-                        <tr>
-                          <th className="text-left p-4 font-medium">Product</th>
-                          <th className="text-left p-4 font-medium">Category</th>
-                          <th className="text-left p-4 font-medium">Price</th>
-                          <th className="text-left p-4 font-medium">Stock</th>
-                          <th className="text-left p-4 font-medium">Status</th>
-                          <th className="text-left p-4 font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredProducts.map((product) => (
-                          <tr key={product.id} className="border-b hover:bg-muted/50">
-                            <td className="p-4">
-                              <div className="flex items-center space-x-3">
-                                {product.images && product.images[0] && (
-                                  <img
-                                    src={product.images[0]}
-                                    alt={product.title}
-                                    className="w-12 h-12 object-cover rounded-lg"
-                                  />
-                                )}
-                                <div>
-                                  <p className="font-medium">{product.title}</p>
-                                  <p className="text-sm text-muted-foreground line-clamp-1">{product.description}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <Badge variant="secondary">{product.category}</Badge>
-                            </td>
-                            <td className="p-4">
-                              <div>
-                                <p className="font-medium">{formatPrice(product.price)}</p>
-                                {product.original_price && (
-                                  <p className="text-sm text-muted-foreground line-through">
-                                    {formatPrice(product.original_price)}
-                                  </p>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <div>
-                                <p className="font-medium">{product.stock_quantity}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {product.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
-                                </p>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <Badge variant={getStatusVariant(product.availability)}>
-                                {product.availability.replace('_', ' ')}
-                              </Badge>
-                            </td>
-                            <td className="p-4">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon">
-                                    <MoreHorizontal className="w-4 h-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48">
-                                  <DropdownMenuItem onClick={() => openProductDetail(product)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => openEditProduct(product)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit Product
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    className="text-red-600 focus:text-red-600"
-                                    onClick={() => deleteProduct(product.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete Product
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
+                  {isLoading ? (
+                    <div className="p-12 text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-muted-foreground">Loading products...</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="border-b">
+                          <tr>
+                            <th className="text-left p-4 font-medium">Product</th>
+                            <th className="text-left p-4 font-medium">Category</th>
+                            <th className="text-left p-4 font-medium">Price</th>
+                            <th className="text-left p-4 font-medium">Stock</th>
+                            <th className="text-left p-4 font-medium">Status</th>
+                            <th className="text-left p-4 font-medium">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {filteredProducts.map((product) => (
+                            <tr key={product.id} className="border-b hover:bg-muted/50">
+                              <td className="p-4">
+                                <div className="flex items-center space-x-3">
+                                  {product.images && product.images[0] && (
+                                    <img
+                                      src={product.images[0]}
+                                      alt={product.title}
+                                      className="w-12 h-12 object-cover rounded-lg"
+                                    />
+                                  )}
+                                  <div>
+                                    <p className="font-medium">{product.title}</p>
+                                    <p className="text-sm text-muted-foreground line-clamp-1">{product.description}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <Badge variant="secondary">{product.category}</Badge>
+                              </td>
+                              <td className="p-4">
+                                <div>
+                                  <p className="font-medium">{formatPrice(product.price)}</p>
+                                  {product.original_price && (
+                                    <p className="text-sm text-muted-foreground line-through">
+                                      {formatPrice(product.original_price)}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div>
+                                  <p className="font-medium">{product.stock_quantity}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {product.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <Badge variant={getStatusVariant(product.availability)}>
+                                  {product.availability.replace('_', ' ')}
+                                </Badge>
+                              </td>
+                              <td className="p-4">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onClick={() => openProductDetail(product)}>
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      View Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => openEditProduct(product)}>
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Edit Product
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      className="text-red-600 focus:text-red-600"
+                                      onClick={() => deleteProduct(product.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete Product
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      
+                      {filteredProducts.length === 0 && !isLoading && (
+                        <div className="p-12 text-center">
+                          <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No products found</h3>
+                          <p className="text-muted-foreground mb-4">
+                            {searchQuery || categoryFilter !== "all"
+                              ? "Try adjusting your search or filter criteria."
+                              : "Get started by adding your first product."}
+                          </p>
+                          <Button onClick={() => router.push('/admin/dashboard')}>
+                            Add Product
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-
-              {filteredProducts.length === 0 && (
-                <Card>
-                  <CardContent className="p-12 text-center">
-                    <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No products found</h3>
-                    <p className="text-muted-foreground mb-4">
-                      {searchQuery || categoryFilter !== "all"
-                        ? "Try adjusting your search or filter criteria."
-                        : "Get started by adding your first product."}
-                    </p>
-                    <Button onClick={() => router.push('/admin/dashboard')}>
-                      Add Product
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
         </div>
