@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const token = authHeader.slice(7) // Remove 'Bearer ' prefix
+    const token = authHeader.slice(7)
     console.log('🔐 Token extracted, length:', token.length)
 
     const user = await getAuthUser(token)
@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
     
     const [products] = await pool.execute(`
       SELECT id, title, description, price, original_price, category, subcategory, brand, 
-             stock_quantity, availability, images, featured, published, created_at
+             stock_quantity, availability, images, featured, published, created_at,
+             rating, review_count
       FROM products 
       ORDER BY created_at DESC
     `)
@@ -62,9 +63,21 @@ export async function GET(request: NextRequest) {
         images = []
       }
       
+      // FIX: Use local placeholder instead of external service
+      // Replace any external placeholder URLs with local ones
+      images = images.map(img => {
+        if (img.includes('via.placeholder.com') || img.includes('placeholder.com')) {
+          // Generate a local placeholder based on product title
+          const productName = encodeURIComponent(product.title || 'Product')
+          return `/api/placeholder/400/400?text=${productName}`
+        }
+        return img
+      })
+      
       // Add placeholder if no images
       if (images.length === 0) {
-        images = ['/api/placeholder/400/400?text=No+Image']
+        const productName = encodeURIComponent(product.title || 'Product')
+        images = [`/api/placeholder/400/400?text=${productName}`]
       }
 
       return {
@@ -139,19 +152,19 @@ export async function POST(request: NextRequest) {
       // Handle form data with file uploads
       const formData = await request.formData()
       
-      // Get product data
+      // Get product data with validation
       productData = {
-        title: formData.get('title') as string,
-        description: formData.get('description') as string,
+        title: (formData.get('title') as string)?.trim(),
+        description: (formData.get('description') as string)?.trim(),
         price: parseFloat(formData.get('price') as string),
         original_price: formData.get('original_price') ? parseFloat(formData.get('original_price') as string) : null,
-        category: formData.get('category') as string,
-        subcategory: formData.get('subcategory') as string || null,
-        brand: formData.get('brand') as string || null,
+        category: (formData.get('category') as string)?.trim(),
+        subcategory: (formData.get('subcategory') as string)?.trim() || null,
+        brand: (formData.get('brand') as string)?.trim() || null,
         stock_quantity: parseInt(formData.get('stock_quantity') as string),
         availability: formData.get('availability') as string,
         featured: formData.get('featured') === 'true',
-        published: formData.get('published') === 'true'
+        published: formData.get('published') !== 'false' // Default to true
       }
 
       // Get image files
@@ -163,21 +176,52 @@ export async function POST(request: NextRequest) {
       // Handle JSON data (from your dashboard)
       productData = await request.json()
       console.log('📦 JSON data received:', productData)
+      
+      // Clean JSON data
+      productData = {
+        title: productData.title?.trim(),
+        description: productData.description?.trim(),
+        price: parseFloat(productData.price),
+        original_price: productData.original_price ? parseFloat(productData.original_price) : null,
+        category: productData.category?.trim(),
+        subcategory: productData.subcategory?.trim() || null,
+        brand: productData.brand?.trim() || null,
+        stock_quantity: parseInt(productData.stock_quantity),
+        availability: productData.availability || 'in_stock',
+        featured: Boolean(productData.featured),
+        published: productData.published !== false // Default to true
+      }
     } else {
       console.log('❌ Unsupported content type:', contentType)
       return NextResponse.json({ error: 'Unsupported content type' }, { status: 400 })
     }
 
-    // Validate required fields
-    if (!productData.title || !productData.description || !productData.price || !productData.category || !productData.stock_quantity) {
-      console.log('❌ Missing required fields')
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    // Enhanced validation
+    if (!productData.title || productData.title.length < 2) {
+      return NextResponse.json({ error: 'Product title must be at least 2 characters' }, { status: 400 })
+    }
+    
+    if (!productData.description || productData.description.length < 10) {
+      return NextResponse.json({ error: 'Product description must be at least 10 characters' }, { status: 400 })
+    }
+    
+    if (!productData.price || productData.price <= 0) {
+      return NextResponse.json({ error: 'Product price must be greater than 0' }, { status: 400 })
+    }
+    
+    if (!productData.category) {
+      return NextResponse.json({ error: 'Product category is required' }, { status: 400 })
+    }
+    
+    if (!productData.stock_quantity || productData.stock_quantity < 0) {
+      return NextResponse.json({ error: 'Valid stock quantity is required' }, { status: 400 })
     }
 
     console.log('💾 Inserting product into database...')
     
-    // Start with empty images array
-    const initialImages: string[] = []
+    // FIX: Start with a local placeholder image instead of empty array
+    const productName = encodeURIComponent(productData.title || 'New Product')
+    const initialImages = [`/api/placeholder/400/400?text=${productName}`]
 
     const [result] = await pool.execute(
       `INSERT INTO products (title, description, price, original_price, category, subcategory, brand, stock_quantity, availability, images, featured, published) 
@@ -222,6 +266,14 @@ export async function POST(request: NextRequest) {
         if (imageResponse.ok) {
           const imageResult = await imageResponse.json()
           console.log('✅ Images uploaded successfully:', imageResult.imageUrls)
+          
+          // Update the product with actual images if upload was successful
+          if (imageResult.imageUrls && imageResult.imageUrls.length > 0) {
+            await pool.execute(
+              'UPDATE products SET images = ? WHERE id = ?',
+              [JSON.stringify(imageResult.imageUrls), productId]
+            )
+          }
         } else {
           console.error('❌ Failed to upload images:', await imageResponse.text())
         }
@@ -241,7 +293,8 @@ export async function POST(request: NextRequest) {
     console.error('❌ Failed to create product:', error)
     return NextResponse.json({ 
       error: 'Internal server error',
-      success: false 
+      success: false,
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
 }

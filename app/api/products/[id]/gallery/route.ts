@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import pool from '@/lib/db'
-
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
@@ -14,7 +13,7 @@ export async function GET(
     const { id: productId } = await params
 
     const [images] = await pool.execute(
-      `SELECT id, product_id, image_url, alt_text, sort_order, created_at 
+      `SELECT id, product_id, image_url, alt_text, sort_order, image_type, created_at 
        FROM product_gallery 
        WHERE product_id = ? 
        ORDER BY sort_order ASC, created_at ASC`,
@@ -34,6 +33,7 @@ export async function GET(
     )
   }
 }
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -60,6 +60,16 @@ export async function POST(
         { error: 'No images provided' },
         { status: 400 }
       )
+    }
+
+    // Validate product exists
+    const [products] = await pool.execute(
+      'SELECT id, title FROM products WHERE id = ?',
+      [productId]
+    )
+
+    if ((products as any[]).length === 0) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     }
 
     const results = []
@@ -115,7 +125,7 @@ export async function POST(
           [
             productId, 
             publicUrl, 
-            `${imageType} view ${i + 1} for product ${productId}`, 
+            `${imageType} view ${i + 1}`, 
             maxOrder + i + 1,
             imageType
           ]
@@ -133,12 +143,13 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: 'Images uploaded successfully',
+        message: `${results.length} image(s) uploaded successfully`,
         uploaded: results
       })
 
     } catch (error) {
       await connection.rollback()
+      console.error('Transaction error in gallery upload:', error)
       throw error
     } finally {
       connection.release()
@@ -147,7 +158,10 @@ export async function POST(
   } catch (error) {
     console.error('Error uploading gallery images:', error)
     return NextResponse.json(
-      { error: 'Failed to upload gallery images' },
+      { 
+        error: 'Failed to upload gallery images',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }
