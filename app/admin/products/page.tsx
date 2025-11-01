@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Plus, Search, Edit, Trash2, Eye, Package, Filter, MoreHorizontal, RefreshCw } from "lucide-react"
+import { useState } from "react"
+import { Plus, Search, Edit, Trash2, Eye, Package } from "lucide-react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { AdminSidebar } from "@/components/admin-sidebar"
@@ -10,230 +10,32 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useAuth } from "@/lib/auth-context"
-import { useRouter } from "next/navigation"
+import { products } from "@/lib/mock-data"
+import Link from "next/link"
+// app/admin/products/page.tsx (Alternative)
+import { redirect } from 'next/navigation'
 
-// Safe product interface with optional fields
-interface Product {
-  id: number
-  title: string
-  description: string
-  price: number
-  original_price?: number | null
-  category: string
-  subcategory?: string | null
-  brand?: string | null
-  stock_quantity: number
-  availability: 'in_stock' | 'out_of_stock' | 'pre_order'
-  images?: string[]
-  featured?: boolean
-  published?: boolean
-  created_at?: string
-  updated_at?: string
-  rating?: number
-  review_count?: number
-}
+
 
 export default function AdminProductsPage() {
-  const { user, isLoading: authLoading } = useAuth()
-  const router = useRouter()
-  const [products, setProducts] = useState<Product[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+   redirect('/admin/dashboard')
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
 
-  // Safe data processing function
-  const processProductsData = (data: any): Product[] => {
-    if (!data) return []
-    
-    // Handle different response formats
-    if (Array.isArray(data)) {
-      return data.map(item => ({
-        id: item.id || 0,
-        title: item.title || 'Untitled Product',
-        description: item.description || '',
-        price: typeof item.price === 'number' ? item.price : 0,
-        original_price: item.original_price || null,
-        category: item.category || 'Uncategorized',
-        subcategory: item.subcategory || null,
-        brand: item.brand || null,
-        stock_quantity: typeof item.stock_quantity === 'number' ? item.stock_quantity : 0,
-        availability: item.availability || 'in_stock',
-        images: Array.isArray(item.images) ? item.images : [],
-        featured: Boolean(item.featured),
-        published: Boolean(item.published),
-        created_at: item.created_at || new Date().toISOString(),
-        updated_at: item.updated_at || new Date().toISOString(),
-        rating: typeof item.rating === 'number' ? item.rating : 0,
-        review_count: typeof item.review_count === 'number' ? item.review_count : 0
-      }))
-    }
-    
-    // If data has a products property
-    if (data.products && Array.isArray(data.products)) {
-      return processProductsData(data.products)
-    }
-    
-    console.warn('Unexpected API response format:', data)
-    return []
-  }
-
-  // Check if user is admin and redirect if not
-  useEffect(() => {
-    if (!authLoading && user && user.role !== 'admin') {
-      router.push('/')
-    }
-  }, [user, authLoading, router])
-
-  // Fetch products data only if user is admin
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      fetchProducts()
-    }
-  }, [user])
-
-  const fetchProducts = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      const token = localStorage.getItem('token')
-      
-      if (!token) {
-        setError('Authentication required. Please log in again.')
-        setIsLoading(false)
-        return
-      }
-
-      console.log('Fetching products from API...')
-      const response = await fetch('/api/admin/products', {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      console.log('API response status:', response.status)
-      
-      if (response.ok) {
-        const responseData = await response.json()
-        console.log('Raw API response:', responseData)
-        
-        const processedProducts = processProductsData(responseData)
-        console.log('Processed products:', processedProducts)
-        
-        setProducts(processedProducts)
-      } else {
-        const errorText = await response.text()
-        console.error('API error:', response.status, errorText)
-        setError(`Failed to load products: ${response.status} ${errorText}`)
-      }
-    } catch (error) {
-      console.error('Failed to fetch products:', error)
-      setError('Failed to load products. Please check your connection and try again.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const filteredProducts = products.filter((product) => {
-    const searchLower = searchQuery.toLowerCase()
-    const matchesSearch = 
-      product.title?.toLowerCase().includes(searchLower) ||
-      product.description?.toLowerCase().includes(searchLower) ||
-      product.category?.toLowerCase().includes(searchLower) ||
-      product.brand?.toLowerCase().includes(searchLower)
-    
+    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
-    
     return matchesSearch && matchesCategory
   })
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("ET", {
       style: "currency",
-      currency: "USD",
+      currency: "ETB",
     }).format(price)
   }
 
-  const categories = [...new Set(products.map(product => product.category).filter(Boolean))]
-
-  const openProductDetail = (product: Product) => {
-    window.open(`/product/${product.id}`, '_blank')
-  }
-
-  const openEditProduct = (product: Product) => {
-    // Redirect to dashboard which has the edit functionality
-    router.push('/admin/dashboard')
-  }
-
-  const deleteProduct = async (productId: number) => {
-    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) return
-    
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/admin/products/${productId}`, {
-        method: 'DELETE',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (response.ok) {
-        fetchProducts() // Refresh the list
-      } else {
-        const errorText = await response.text()
-        alert(`Failed to delete product: ${errorText}`)
-      }
-    } catch (error) {
-      console.error('Failed to delete product:', error)
-      alert('Failed to delete product. Please try again.')
-    }
-  }
-
-  const getStatusVariant = (availability: string) => {
-    switch (availability) {
-      case 'in_stock':
-        return 'default'
-      case 'pre_order':
-        return 'secondary'
-      case 'out_of_stock':
-        return 'destructive'
-      default:
-        return 'outline'
-    }
-  }
-
-  // Show loading while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen">
-        <Navigation />
-        <main className="container mx-auto px-4 py-8">
-          <div className="grid lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-1">
-              <AdminSidebar />
-            </div>
-            <div className="lg:col-span-3">
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Checking authorization...</p>
-              </div>
-            </div>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    )
-  }
-
-  // If not admin, don't render anything (will redirect)
-  if (!user || user.role !== 'admin') {
-    return null
-  }
+  const categories = Array.from(new Set(products.map((p) => p.category)))
 
   return (
     <div className="min-h-screen">
@@ -251,44 +53,13 @@ export default function AdminProductsPage() {
                   <h1 className="text-3xl font-bold">Product Management</h1>
                   <p className="text-muted-foreground">Manage your product catalog</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={fetchProducts} disabled={isLoading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
-                  <Button onClick={() => router.push('/admin/dashboard')}>
+                <Link href="/admin/products/new">
+                  <Button>
                     <Plus className="w-4 h-4 mr-2" />
-                    Go to Dashboard
+                    Add Product
                   </Button>
-                </div>
+                </Link>
               </div>
-
-              {error && (
-                <Card className="border-red-200 bg-red-50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-red-700 font-medium">Error loading products</p>
-                        <p className="text-red-600 text-sm mt-1">{error}</p>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={fetchProducts}>
-                        Retry
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Debug info - remove in production */}
-              {process.env.NODE_ENV === 'development' && (
-                <Card className="border-blue-200 bg-blue-50">
-                  <CardContent className="p-4">
-                    <p className="text-blue-700 text-sm">
-                      Products loaded: {products.length} | Filtered: {filteredProducts.length}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* Filters */}
               <div className="flex flex-col sm:flex-row gap-4">
@@ -319,122 +90,101 @@ export default function AdminProductsPage() {
               {/* Products Table */}
               <Card>
                 <CardContent className="p-0">
-                  {isLoading ? (
-                    <div className="p-12 text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                      <p className="text-muted-foreground">Loading products...</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="border-b">
-                          <tr>
-                            <th className="text-left p-4 font-medium">Product</th>
-                            <th className="text-left p-4 font-medium">Category</th>
-                            <th className="text-left p-4 font-medium">Price</th>
-                            <th className="text-left p-4 font-medium">Stock</th>
-                            <th className="text-left p-4 font-medium">Status</th>
-                            <th className="text-left p-4 font-medium">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredProducts.map((product) => (
-                            <tr key={product.id} className="border-b hover:bg-muted/50">
-                              <td className="p-4">
-                                <div className="flex items-center space-x-3">
-                                  {product.images && product.images[0] && (
-                                    <img
-                                      src={product.images[0]}
-                                      alt={product.title}
-                                      className="w-12 h-12 object-cover rounded-lg"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src = '/api/placeholder/48/48'
-                                      }}
-                                    />
-                                  )}
-                                  <div>
-                                    <p className="font-medium">{product.title}</p>
-                                    <p className="text-sm text-muted-foreground line-clamp-1">
-                                      {product.description || 'No description'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <Badge variant="secondary">{product.category}</Badge>
-                              </td>
-                              <td className="p-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b">
+                        <tr>
+                          <th className="text-left p-4 font-medium">Product</th>
+                          <th className="text-left p-4 font-medium">Category</th>
+                          <th className="text-left p-4 font-medium">Price</th>
+                          <th className="text-left p-4 font-medium">Stock</th>
+                          <th className="text-left p-4 font-medium">Status</th>
+                          <th className="text-left p-4 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredProducts.map((product) => (
+                          <tr key={product.id} className="border-b hover:bg-muted/50">
+                            <td className="p-4">
+                              <div className="flex items-center space-x-3">
+                                <img
+                                  src={product.images[0] || "/placeholder.svg"}
+                                  alt={product.name}
+                                  className="w-12 h-12 object-cover rounded-lg"
+                                />
                                 <div>
-                                  <p className="font-medium">{formatPrice(product.price)}</p>
-                                  {product.original_price && product.original_price > product.price && (
-                                    <p className="text-sm text-muted-foreground line-through">
-                                      {formatPrice(product.original_price)}
-                                    </p>
-                                  )}
+                                  <p className="font-medium">{product.name}</p>
+                                  <p className="text-sm text-muted-foreground line-clamp-1">{product.description}</p>
                                 </div>
-                              </td>
-                              <td className="p-4">
-                                <div>
-                                  <p className="font-medium">{product.stock_quantity}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {product.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <Badge variant="secondary">{product.category}</Badge>
+                            </td>
+                            <td className="p-4">
+                              <div>
+                                <p className="font-medium">{formatPrice(product.price)}</p>
+                                {product.original_price && (
+                                  <p className="text-sm text-muted-foreground line-through">
+                                    {formatPrice(product.original_price)}
                                   </p>
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <Badge variant={getStatusVariant(product.availability)}>
-                                  {product.availability.replace('_', ' ')}
-                                </Badge>
-                              </td>
-                              <td className="p-4">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                      <MoreHorizontal className="w-4 h-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-48">
-                                    <DropdownMenuItem onClick={() => openProductDetail(product)}>
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => openEditProduct(product)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit Product
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      className="text-red-600 focus:text-red-600"
-                                      onClick={() => deleteProduct(product.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Delete Product
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      
-                      {filteredProducts.length === 0 && !isLoading && (
-                        <div className="p-12 text-center">
-                          <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                          <h3 className="text-lg font-semibold mb-2">No products found</h3>
-                          <p className="text-muted-foreground mb-4">
-                            {searchQuery || categoryFilter !== "all"
-                              ? "Try adjusting your search or filter criteria."
-                              : "Get started by adding your first product."}
-                          </p>
-                          <Button onClick={() => router.push('/admin/dashboard')}>
-                            Go to Dashboard
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div>
+                                <p className="font-medium">{product.stockCount}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {product.inStock ? "In Stock" : "Out of Stock"}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <Badge className={product.inStock ? "bg-green-500" : "bg-red-500"}>
+                                {product.inStock ? "Active" : "Inactive"}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center space-x-2">
+                                <Link href={`/product/${product.id}`}>
+                                  <Button variant="ghost" size="sm">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                </Link>
+                                <Link href={`/admin/products/${product.id}/edit`}>
+                                  <Button variant="ghost" size="sm">
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                </Link>
+                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </CardContent>
               </Card>
+
+              {filteredProducts.length === 0 && (
+                <Card>
+                  <CardContent className="p-12 text-center">
+                    <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No products found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchQuery || categoryFilter !== "all"
+                        ? "Try adjusting your search or filter criteria."
+                        : "Get started by adding your first product."}
+                    </p>
+                    <Link href="/admin/products/new">
+                      <Button>Add Product</Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>
