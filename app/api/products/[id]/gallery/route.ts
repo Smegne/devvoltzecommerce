@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import pool from '@/lib/db'
 
+import { writeFile, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { existsSync } from 'fs'
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,16 +78,43 @@ export async function POST(
       for (let i = 0; i < images.length; i++) {
         const image = images[i]
         
-        // For demo purposes, we'll use the placeholder API
-        // In production, integrate with cloud storage (AWS S3, Cloudinary, etc.)
-        const imageUrl = `/api/placeholder/800/800?text=${imageType}+${i+1}`
-        
+        if (image.size === 0) continue
+
+        // Validate file type
+        if (!image.type.startsWith('image/')) {
+          continue // Skip non-image files
+        }
+
+        // Generate unique filename
+        const timestamp = Date.now()
+        const randomString = Math.random().toString(36).substring(2, 15)
+        const fileExtension = image.type.split('/')[1] || 'jpg'
+        const fileName = `gallery-${productId}-${timestamp}-${randomString}.${fileExtension}`
+
+        // Convert image to buffer
+        const bytes = await image.arrayBuffer()
+        const buffer = Buffer.from(bytes)
+
+        // Define upload path
+        const uploadDir = join(process.cwd(), 'public', 'uploads', 'products', 'gallery')
+        const filePath = join(uploadDir, fileName)
+        const publicUrl = `/uploads/products/gallery/${fileName}`
+
+        // Create directory if it doesn't exist
+        if (!existsSync(uploadDir)) {
+          await mkdir(uploadDir, { recursive: true })
+        }
+
+        // Save file
+        await writeFile(filePath, buffer)
+
+        // Insert into database with actual image URL
         const [result] = await connection.execute(
           `INSERT INTO product_gallery (product_id, image_url, alt_text, sort_order, image_type) 
            VALUES (?, ?, ?, ?, ?)`,
           [
             productId, 
-            imageUrl, 
+            publicUrl, 
             `${imageType} view ${i + 1} for product ${productId}`, 
             maxOrder + i + 1,
             imageType
@@ -93,7 +124,8 @@ export async function POST(
         results.push({
           imageId: (result as any).insertId,
           originalName: image.name,
-          imageType
+          imageType,
+          imageUrl: publicUrl
         })
       }
 

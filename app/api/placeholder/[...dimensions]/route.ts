@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { dimensions: string[] } }
+  { params }: { params: Promise<{ dimensions: string[] }> } // params is now a Promise
 ) {
   try {
-    const { dimensions } = params
+    // AWAIT the params first - this is the key fix
+    const { dimensions } = await params
     const [width = 400, height = 400] = dimensions[0].split('x').map(Number)
     
     // Get text parameter from search params

@@ -20,9 +20,9 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
   const [imageError, setImageError] = useState(false)
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("ET", {
       style: "currency",
-      currency: "USD",
+      currency: "ETB",
     }).format(price)
   }
 

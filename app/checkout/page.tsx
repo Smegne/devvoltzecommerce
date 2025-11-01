@@ -99,9 +99,9 @@ export default function CheckoutPage() {
   const total = subtotal + shipping + tax
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("ET", {
       style: "currency",
-      currency: "USD",
+      currency: "ETB",
     }).format(price)
   }
 

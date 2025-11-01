@@ -23,9 +23,9 @@ export default function CartPage() {
   const total = subtotal + shipping + tax - discount
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("ET", {
       style: "currency",
-      currency: "USD",
+      currency: "ETB",
     }).format(price)
   }
 

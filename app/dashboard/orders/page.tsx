@@ -48,9 +48,9 @@ export default function OrdersPage() {
   const filteredOrders = orders.filter((order) => statusFilter === "all" || order.status === statusFilter)
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("ET", {
       style: "currency",
-      currency: "USD",
+      currency: "ETB",
     }).format(price)
   }
 
