@@ -20,7 +20,7 @@ export default function AdminSettingsPage() {
     storeEmail: "support@elitestore.com",
     storePhone: "+1 (555) 123-4567",
     storeAddress: "123 Commerce Street, San Francisco, CA 94102",
-    currency: "USD",
+    currency: "ETB",
     taxRate: "8.25",
   })
 

@@ -590,7 +590,7 @@ export function isOutOfStock(product: Product): boolean {
 }
 
 // Price formatting utility
-export function formatPrice(price: number, currency: string = 'USD'): string {
+export function formatPrice(price: number, currency: string = 'ETB'): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency,
