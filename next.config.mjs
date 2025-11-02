@@ -8,9 +8,8 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   
-  // Image optimization configuration - UPDATED
+  // Image optimization configuration - ENHANCED
   images: {
-    // Remove deprecated 'domains' and use only remotePatterns
     remotePatterns: [
       {
         protocol: 'http',
@@ -39,6 +38,10 @@ const nextConfig = {
       },
     ],
     
+    // ADD THIS: Allow local images from public folder
+    domains: ['localhost'],
+    unoptimized: false, // Keep optimization enabled
+    
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     
@@ -63,7 +66,6 @@ const nextConfig = {
         destination: '/admin/dashboard',
         permanent: false,
       },
-      // Add redirect for order-confirmation without params
       {
         source: '/order-confirmation',
         destination: '/',
@@ -72,11 +74,20 @@ const nextConfig = {
     ]
   },
   
-  // Headers
+  // Headers - ENHANCED for uploads
   async headers() {
     return [
       {
         source: '/api/placeholder/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/uploads/:path*',
         headers: [
           {
             key: 'Cache-Control',

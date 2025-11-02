@@ -13,10 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.slice(7)
-    console.log('🔐 Token extracted, length:', token.length)
-
     const user = await getAuthUser(token)
-    console.log('🔐 User from token:', user ? `Role: ${user.role}` : 'No user found')
     
     if (!user) {
       console.log('❌ No user found from token')
@@ -40,12 +37,10 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Products fetched successfully, count:', (products as any[]).length)
     
-    // FIX: Ensure we always return a consistent array format
     const productsArray = Array.isArray(products) ? products : []
     
-    // FIX: Format products with proper image handling
+    // ENHANCED: Better image handling for production
     const formattedProducts = productsArray.map((product: any) => {
-      // Handle images - ensure it's always an array
       let images: string[] = []
       try {
         if (typeof product.images === 'string') {
@@ -58,24 +53,29 @@ export async function GET(request: NextRequest) {
         images = []
       }
       
-      // Ensure images is always an array
       if (!Array.isArray(images)) {
         images = []
       }
       
-      // FIX: Use local placeholder instead of external service
-      // Replace any external placeholder URLs with local ones
+      // ENHANCED: Ensure all images are properly formatted
       images = images.map(img => {
+        // Convert any local paths to proper URLs
+        if (img.startsWith('/uploads/')) {
+          // These are now in public folder, so they work in both dev and production
+          return img
+        }
+        
+        // Replace external placeholders with local ones
         if (img.includes('via.placeholder.com') || img.includes('placeholder.com')) {
-          // Generate a local placeholder based on product title
           const productName = encodeURIComponent(product.title || 'Product')
           return `/api/placeholder/400/400?text=${productName}`
         }
+        
         return img
       })
       
-      // Add placeholder if no images
-      if (images.length === 0) {
+      // Use placeholder if no valid images
+      if (images.length === 0 || images.every(img => !img || img === '')) {
         const productName = encodeURIComponent(product.title || 'Product')
         images = [`/api/placeholder/400/400?text=${productName}`]
       }
@@ -103,12 +103,10 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Formatted products count:', formattedProducts.length)
     
-    // FIX: Return as array directly (not wrapped in object)
     return NextResponse.json(formattedProducts)
 
   } catch (error) {
     console.error('❌ Failed to fetch products:', error)
-    // FIX: Return empty array on error to prevent frontend crashes
     return NextResponse.json([], { status: 500 })
   }
 }
@@ -124,10 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.slice(7)
-    console.log('🔐 Token extracted, length:', token.length)
-
     const user = await getAuthUser(token)
-    console.log('🔐 User from token:', user ? `Role: ${user.role}` : 'No user found')
     
     if (!user) {
       console.log('❌ No user found from token')
@@ -141,7 +136,6 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Admin authorization successful, creating product...')
 
-    // Check content type and handle accordingly
     const contentType = request.headers.get('content-type')
     console.log('📦 Content-Type:', contentType)
 
@@ -149,10 +143,8 @@ export async function POST(request: NextRequest) {
     let imageFiles: File[] = []
 
     if (contentType?.includes('multipart/form-data')) {
-      // Handle form data with file uploads
       const formData = await request.formData()
       
-      // Get product data with validation
       productData = {
         title: (formData.get('title') as string)?.trim(),
         description: (formData.get('description') as string)?.trim(),
@@ -164,20 +156,16 @@ export async function POST(request: NextRequest) {
         stock_quantity: parseInt(formData.get('stock_quantity') as string),
         availability: formData.get('availability') as string,
         featured: formData.get('featured') === 'true',
-        published: formData.get('published') !== 'false' // Default to true
+        published: formData.get('published') !== 'false'
       }
 
-      // Get image files
       const images = formData.getAll('images')
       imageFiles = images.filter(img => img instanceof File) as File[]
       console.log('📸 Image files received:', imageFiles.length)
 
     } else if (contentType?.includes('application/json')) {
-      // Handle JSON data (from your dashboard)
       productData = await request.json()
-      console.log('📦 JSON data received:', productData)
       
-      // Clean JSON data
       productData = {
         title: productData.title?.trim(),
         description: productData.description?.trim(),
@@ -189,14 +177,13 @@ export async function POST(request: NextRequest) {
         stock_quantity: parseInt(productData.stock_quantity),
         availability: productData.availability || 'in_stock',
         featured: Boolean(productData.featured),
-        published: productData.published !== false // Default to true
+        published: productData.published !== false
       }
     } else {
-      console.log('❌ Unsupported content type:', contentType)
       return NextResponse.json({ error: 'Unsupported content type' }, { status: 400 })
     }
 
-    // Enhanced validation
+    // Validation
     if (!productData.title || productData.title.length < 2) {
       return NextResponse.json({ error: 'Product title must be at least 2 characters' }, { status: 400 })
     }
@@ -219,7 +206,7 @@ export async function POST(request: NextRequest) {
 
     console.log('💾 Inserting product into database...')
     
-    // FIX: Start with a local placeholder image instead of empty array
+    // Start with placeholder image
     const productName = encodeURIComponent(productData.title || 'New Product')
     const initialImages = [`/api/placeholder/400/400?text=${productName}`]
 
@@ -245,7 +232,7 @@ export async function POST(request: NextRequest) {
     const productId = (result as any).insertId
     console.log('✅ Product created successfully, ID:', productId)
 
-    // Handle image uploads if there are any
+    // Upload images if provided
     if (imageFiles.length > 0) {
       console.log('📸 Uploading product images...')
       
@@ -266,14 +253,6 @@ export async function POST(request: NextRequest) {
         if (imageResponse.ok) {
           const imageResult = await imageResponse.json()
           console.log('✅ Images uploaded successfully:', imageResult.imageUrls)
-          
-          // Update the product with actual images if upload was successful
-          if (imageResult.imageUrls && imageResult.imageUrls.length > 0) {
-            await pool.execute(
-              'UPDATE products SET images = ? WHERE id = ?',
-              [JSON.stringify(imageResult.imageUrls), productId]
-            )
-          }
         } else {
           console.error('❌ Failed to upload images:', await imageResponse.text())
         }
@@ -282,7 +261,6 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // FIX: Return consistent success response
     return NextResponse.json({ 
       success: true, 
       productId,

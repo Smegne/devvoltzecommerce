@@ -7,21 +7,25 @@ import { existsSync } from 'fs'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '')
+    // AWAIT the params first
+    const { id } = await params
+    const authHeader = request.headers.get('Authorization')
     
-    if (!token) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const token = authHeader.slice(7)
     const user = await getAuthUser(token)
+    
     if (!user || user.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 })
     }
 
-    const productId = params.id
+    const productId = id
     const formData = await request.formData()
     const images = formData.getAll('images') as File[]
 
@@ -60,7 +64,7 @@ export async function POST(
       const bytes = await image.arrayBuffer()
       const buffer = Buffer.from(bytes)
 
-      // Define upload path
+      // ALWAYS use public folder for both dev and production
       const uploadDir = join(process.cwd(), 'public', 'uploads', 'products')
       const filePath = join(uploadDir, fileName)
       const publicUrl = `/uploads/products/${fileName}`
@@ -70,9 +74,11 @@ export async function POST(
         await mkdir(uploadDir, { recursive: true })
       }
 
-      // Save file
+      // Save file to public folder
       await writeFile(filePath, buffer)
       uploadedImageUrls.push(publicUrl)
+      
+      console.log(`✅ Image saved: ${publicUrl}`)
     }
 
     if (uploadedImageUrls.length === 0) {
@@ -94,24 +100,29 @@ export async function POST(
       existingImages = []
     }
 
-    // Combine existing images with new ones
-    const allImages = [...existingImages, ...uploadedImageUrls]
+    // Replace placeholder with actual images
+    const updatedImages = [...uploadedImageUrls]
 
     // Update product with new images
     await pool.execute(
       'UPDATE products SET images = ? WHERE id = ?',
-      [JSON.stringify(allImages), productId]
+      [JSON.stringify(updatedImages), productId]
     )
+
+    console.log(`✅ Product ${productId} images updated successfully`)
 
     return NextResponse.json({
       success: true,
       message: 'Images uploaded successfully',
       imageUrls: uploadedImageUrls,
-      totalImages: allImages.length
+      totalImages: updatedImages.length
     })
 
   } catch (error) {
-    console.error('Image upload error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('❌ Image upload error:', error)
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
