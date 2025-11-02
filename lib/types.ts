@@ -59,83 +59,124 @@ export interface User {
   created_at: string
 }
 
-// Helper function to convert database product to component product
+// FIXED: Helper function to convert database product to component product
 export function convertToProductComponent(product: any): Product {
+  console.log(`🔄 Converting product ${product.id}:`, {
+    title: product.title,
+    category: product.category,
+    images: product.images,
+    published: product.published
+  })
+
   // Handle images - could be array, JSON string, or undefined
   let images: string[] = []
-  if (Array.isArray(product.images)) {
-    images = product.images
-  } else if (typeof product.images === 'string') {
-    try {
-      images = JSON.parse(product.images)
-    } catch {
+  try {
+    if (Array.isArray(product.images)) {
+      images = product.images
+    } else if (typeof product.images === 'string') {
+      // Try to parse JSON string
+      const parsed = JSON.parse(product.images)
+      images = Array.isArray(parsed) ? parsed : [parsed]
+    } else if (product.images) {
       images = [product.images]
     }
-  } else if (product.images) {
-    images = [product.images]
-  } else {
-    // Default placeholder image if no images
-    images = ['/placeholder.svg']
+  } catch (error) {
+    console.error(`❌ Error parsing images for product ${product.id}:`, error)
+    images = []
+  }
+  
+  // If no images, use placeholder
+  if (images.length === 0) {
+    const productName = encodeURIComponent(product.title || product.name || 'Product')
+    images = [`/api/placeholder/400/400?text=${productName}`]
   }
 
   // Handle tags - could be array, JSON string, or undefined
   let tags: string[] = []
-  if (Array.isArray(product.tags)) {
-    tags = product.tags
-  } else if (typeof product.tags === 'string') {
-    try {
-      tags = JSON.parse(product.tags)
-    } catch {
-      tags = product.tags ? [product.tags] : []
+  try {
+    if (Array.isArray(product.tags)) {
+      tags = product.tags
+    } else if (typeof product.tags === 'string') {
+      const parsed = JSON.parse(product.tags)
+      tags = Array.isArray(parsed) ? parsed : [parsed]
     }
+  } catch (error) {
+    console.error(`❌ Error parsing tags for product ${product.id}:`, error)
+    tags = []
   }
 
-  const inStock = product.availability === 'in_stock'
-  const stockCount = product.stock_quantity || 0
-  // Add default rating and review count for products that don't have them
-  const rating = product.rating || 4.5 // Default rating for demo
-  const reviewCount = product.review_count || Math.floor(Math.random() * 100) + 10 // Random reviews for demo
+  // Handle stock and availability
+  const stockCount = Number(product.stock_quantity) || 0
+  const inStock = product.availability === 'in_stock' && stockCount > 0
+  
+  // Handle rating and reviews with defaults
+  const rating = Number(product.rating) || 4.5
+  const reviewCount = Number(product.review_count) || Math.floor(Math.random() * 50) + 5
+
+  // Handle price values
+  const price = Number(product.price) || 0
+  const originalPrice = product.original_price ? Number(product.original_price) : undefined
+
+  console.log(`✅ Converted product ${product.id}:`, {
+    name: product.title,
+    price,
+    stockCount,
+    inStock,
+    imagesCount: images.length
+  })
 
   return {
-    id: product.id,
+    id: Number(product.id),
     name: product.title || product.name || 'Unnamed Product',
     title: product.title || product.name || 'Unnamed Product',
     description: product.description || 'No description available',
-    price: product.price || 0,
-    discountPrice: product.discountPrice || product.discounted_price || product.sale_price, // Added discount price handling
-    original_price: product.original_price,
+    price: price,
+    discountPrice: product.discountPrice || product.discounted_price || product.sale_price,
+    original_price: originalPrice,
     category: product.category || 'Uncategorized',
-    subcategory: product.subcategory,
-    brand: product.brand,
+    subcategory: product.subcategory || null,
+    brand: product.brand || null,
     stock_quantity: stockCount,
     stockCount: stockCount,
-    availability: product.availability || 'out_of_stock',
+    availability: product.availability || (inStock ? 'in_stock' : 'out_of_stock'),
     inStock: inStock,
     images: images,
     rating: rating,
     review_count: reviewCount,
     reviewCount: reviewCount,
     tags: tags,
-    featured: product.featured || false,
-    published: product.published !== false,
+    featured: Boolean(product.featured),
+    published: product.published !== false && product.published !== 0,
     created_at: product.created_at || new Date().toISOString(),
     createdAt: product.created_at || new Date().toISOString()
   }
 }
 
-// Helper function to convert database category to component category
+// FIXED: Helper function to convert database category to component category
 export function convertToCategoryComponent(category: any, subcategories: string[] = []): Category {
+  console.log(`🔄 Converting category ${category.id}:`, {
+    name: category.name,
+    slug: category.slug,
+    image: category.image || category.image_url
+  })
+
   // Handle both image and image_url columns from database
-  const image = category.image || category.image_url || '/placeholder.svg'
+  let image = category.image || category.image_url
   
+  // If no image, use placeholder based on category name
+  if (!image) {
+    const categoryName = encodeURIComponent(category.name || 'Category')
+    image = `/api/placeholder/400/300?text=${categoryName}`
+  }
+
   return {
-    id: category.id,
+    id: Number(category.id),
     name: category.name || 'Unnamed Category',
     slug: category.slug || category.name?.toLowerCase().replace(/\s+/g, '-') || 'unnamed-category',
     description: category.description || 'No description available',
     image: image,
     subcategories: subcategories,
-    product_count: category.product_count
+    product_count: category.product_count ? Number(category.product_count) : undefined
   }
 }
 
@@ -188,7 +229,7 @@ export interface DatabaseProduct {
   title: string
   description: string
   price: number
-  discountPrice?: number // Added missing property
+  discountPrice?: number
   original_price?: number
   category: string
   subcategory?: string
@@ -221,7 +262,7 @@ export interface ProductFormData {
   title: string
   description: string
   price: string
-  discountPrice?: string // Added missing property
+  discountPrice?: string
   original_price?: string
   category: string
   subcategory?: string
@@ -604,9 +645,29 @@ export function formatRating(rating: number): string {
 
 // Image utility
 export function getProductImage(product: Product, index: number = 0): string {
-  return product.images[index] || '/placeholder-product.jpg'
+  return product.images[index] || '/api/placeholder/400/400?text=Product'
 }
 
 export function getCategoryImage(category: Category): string {
-  return category.image || '/placeholder-category.jpg'
+  return category.image || '/api/placeholder/400/300?text=Category'
+}
+
+// NEW: Debug utility to check product conversion
+export function debugProductConversion(rawProduct: any): void {
+  console.group(`🔍 Debug Product Conversion - ID: ${rawProduct.id}`)
+  console.log('Raw product:', rawProduct)
+  console.log('Images type:', typeof rawProduct.images)
+  console.log('Images value:', rawProduct.images)
+  console.log('Published:', rawProduct.published)
+  console.log('Stock quantity:', rawProduct.stock_quantity)
+  console.log('Availability:', rawProduct.availability)
+  console.groupEnd()
+}
+
+// NEW: Validate product before conversion
+export function validateProductData(product: any): boolean {
+  if (!product) return false
+  if (!product.id) return false
+  if (!product.title && !product.name) return false
+  return true
 }

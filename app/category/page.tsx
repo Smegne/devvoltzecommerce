@@ -34,48 +34,70 @@ export default function CategoryPage() {
     fetchCategoryData()
   }, [categorySlug])
 
-  const fetchCategoryData = async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
+const fetchCategoryData = async () => {
+  try {
+    setIsLoading(true)
+    setError(null)
 
-      const [categoryRes, productsRes, categoriesRes] = await Promise.all([
-        fetch(`/api/categories/${categorySlug}`),
-        fetch(`/api/categories/${categorySlug}/products`),
-        fetch('/api/categories')
-      ])
+    console.log('🔄 Fetching category data for:', categorySlug)
 
-      if (!categoryRes.ok) {
-        throw new Error('Category not found')
-      }
+    const [categoryRes, productsRes, categoriesRes] = await Promise.all([
+      fetch(`/api/categories/${categorySlug}`),
+      fetch(`/api/categories/${categorySlug}/products`),
+      fetch('/api/categories')
+    ])
 
-      const categoryData = await categoryRes.json()
-      const productsData = await productsRes.json()
-      const categoriesData = await categoriesRes.json()
+    console.log('📊 API Responses:', {
+      category: categoryRes.status,
+      products: productsRes.status,
+      categories: categoriesRes.status
+    })
 
-      // Get unique subcategories from products
-      const subcategories = Array.from(new Set(
-        productsData
-          .map((product: any) => product.subcategory)
-          .filter(Boolean)
-      )) as string[]
-
-      // Convert data to component types
-      const convertedCategory = convertToCategoryComponent(categoryData, subcategories)
-      const convertedProducts = productsData.map((product: any) => convertToProductComponent(product))
-      const convertedCategories = categoriesData.map((cat: any) => convertToCategoryComponent(cat))
-
-      setCategory(convertedCategory)
-      setCategoryProducts(convertedProducts)
-      setAllCategories(convertedCategories)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load category')
-      console.error('Failed to fetch category data:', err)
-    } finally {
-      setIsLoading(false)
+    if (!categoryRes.ok) {
+      throw new Error('Category not found')
     }
-  }
 
+    const categoryData = await categoryRes.json()
+    const productsData = await productsRes.json()
+    const categoriesData = await categoriesRes.json()
+
+    console.log('📦 Raw data received:', {
+      category: categoryData,
+      productsCount: productsData.length,
+      products: productsData.map((p: any) => ({ id: p.id, title: p.title, category: p.category })),
+      categoriesCount: categoriesData.length
+    })
+
+    // Get unique subcategories from products
+    const subcategories = Array.from(new Set(
+      productsData
+        .map((product: any) => product.subcategory)
+        .filter(Boolean)
+    )) as string[]
+
+    console.log('🏷️ Subcategories found:', subcategories)
+
+    // Convert data to component types
+    const convertedCategory = convertToCategoryComponent(categoryData, subcategories)
+    const convertedProducts = productsData.map((product: any) => convertToProductComponent(product))
+    const convertedCategories = categoriesData.map((cat: any) => convertToCategoryComponent(cat))
+
+    console.log('✅ Converted data:', {
+      category: convertedCategory,
+      productsCount: convertedProducts.length,
+      convertedProducts: convertedProducts.map((p: any) => ({ id: p.id, name: p.name, category: p.category }))
+    })
+
+    setCategory(convertedCategory)
+    setCategoryProducts(convertedProducts)
+    setAllCategories(convertedCategories)
+  } catch (err) {
+    console.error('❌ Failed to fetch category data:', err)
+    setError(err instanceof Error ? err.message : 'Failed to load category')
+  } finally {
+    setIsLoading(false)
+  }
+}
   const filteredProducts = useMemo(() => {
     if (!categoryProducts.length) return []
 

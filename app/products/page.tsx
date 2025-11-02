@@ -18,10 +18,12 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("")
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>("")
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000])
+  // FIXED: Increased price range to accommodate all products
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 50000])
   const [minRating, setMinRating] = useState<number>(0)
   const [sortBy, setSortBy] = useState<string>("featured")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch products and categories from database
   useEffect(() => {
@@ -31,25 +33,51 @@ export default function ProductsPage() {
   const fetchProductsAndCategories = async () => {
     try {
       setIsLoading(true)
+      setError(null)
       
+      console.log('🔄 Fetching products and categories...')
+
       const [productsRes, categoriesRes] = await Promise.all([
         fetch('/api/products'),
         fetch('/api/categories')
       ])
 
-      if (productsRes.ok) {
-        const productsData = await productsRes.json()
-        const convertedProducts = productsData.map((product: any) => convertToProductComponent(product))
-        setProducts(convertedProducts)
+      console.log('📊 API Responses:', {
+        products: productsRes.status,
+        categories: categoriesRes.status
+      })
+
+      if (!productsRes.ok) {
+        throw new Error(`Failed to fetch products: ${productsRes.status}`)
       }
 
-      if (categoriesRes.ok) {
-        const categoriesData = await categoriesRes.json()
-        const convertedCategories = categoriesData.map((cat: any) => convertToCategoryComponent(cat))
-        setCategories(convertedCategories)
+      if (!categoriesRes.ok) {
+        throw new Error(`Failed to fetch categories: ${categoriesRes.status}`)
       }
+
+      const productsData = await productsRes.json()
+      const categoriesData = await categoriesRes.json()
+
+      console.log('📦 Raw data received:', {
+        productsCount: productsData.length,
+        products: productsData.map((p: any) => ({ id: p.id, title: p.title, price: p.price })),
+        categoriesCount: categoriesData.length
+      })
+
+      const convertedProducts = productsData.map((product: any) => convertToProductComponent(product))
+      const convertedCategories = categoriesData.map((cat: any) => convertToCategoryComponent(cat))
+
+      console.log('✅ Converted data:', {
+        productsCount: convertedProducts.length,
+        categoriesCount: convertedCategories.length,
+        convertedProducts: convertedProducts.map((p: Product) => ({ id: p.id, name: p.name, price: p.price }))
+      })
+
+      setProducts(convertedProducts)
+      setCategories(convertedCategories)
     } catch (error) {
-      console.error('Failed to fetch data:', error)
+      console.error('❌ Failed to fetch data:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load products')
     } finally {
       setIsLoading(false)
     }
@@ -59,7 +87,29 @@ export default function ProductsPage() {
   const filteredProducts = useMemo(() => {
     if (!products.length) return []
 
+    console.log('🔍 Starting product filtering:', {
+      totalProducts: products.length,
+      searchQuery,
+      selectedCategory,
+      selectedSubcategory,
+      priceRange,
+      minRating,
+      sortBy
+    })
+
     const filtered = products.filter((product) => {
+      // Debug each product's filtering
+      const filterResults = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        passesSearch: true,
+        passesCategory: true,
+        passesSubcategory: true,
+        passesPrice: true,
+        passesRating: true
+      }
+
       // Search query filter
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
@@ -68,31 +118,43 @@ export default function ProductsPage() {
         const matchesCategory = product.category.toLowerCase().includes(q)
         const matchesBrand = product.brand?.toLowerCase().includes(q)
         if (!matchesName && !matchesDescription && !matchesCategory && !matchesBrand) {
+          filterResults.passesSearch = false
           return false
         }
       }
 
       // Category filter
       if (selectedCategory && product.category !== selectedCategory) {
+        filterResults.passesCategory = false
         return false
       }
 
       // Subcategory filter
       if (selectedSubcategory && product.subcategory !== selectedSubcategory) {
+        filterResults.passesSubcategory = false
         return false
       }
 
       // Price range filter
       if (product.price < priceRange[0] || product.price > priceRange[1]) {
+        filterResults.passesPrice = false
+        console.log(`❌ Product ${product.id} filtered by price: ${product.price} not in range [${priceRange[0]}, ${priceRange[1]}]`)
         return false
       }
 
       // Rating filter
       if (product.rating < minRating) {
+        filterResults.passesRating = false
         return false
       }
 
+      console.log(`✅ Product ${product.id} passed all filters:`, filterResults)
       return true
+    })
+
+    console.log('✅ After basic filtering:', {
+      filteredCount: filtered.length,
+      filteredProducts: filtered.map(p => ({ id: p.id, name: p.name, price: p.price }))
     })
 
     // Sort products
@@ -126,6 +188,11 @@ export default function ProductsPage() {
         })
     }
 
+    console.log('🎯 Final filtered products:', {
+      count: filtered.length,
+      products: filtered.map(p => ({ id: p.id, name: p.name, price: p.price }))
+    })
+
     return filtered
   }, [products, searchQuery, selectedCategory, selectedSubcategory, priceRange, minRating, sortBy])
 
@@ -133,7 +200,7 @@ export default function ProductsPage() {
     setSearchQuery("")
     setSelectedCategory("")
     setSelectedSubcategory("")
-    setPriceRange([0, 5000])
+    setPriceRange([0, 50000]) // FIXED: Increased range
     setMinRating(0)
     setSortBy("featured")
   }
@@ -149,6 +216,34 @@ export default function ProductsPage() {
     )) as string[]
     return subcategories
   }, [selectedCategory, products])
+
+  if (error) {
+    return (
+      <div className="min-h-screen">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="text-center py-16">
+            <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-full flex items-center justify-center">
+              <Filter className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h1 className="text-3xl font-bold mb-4">Error Loading Products</h1>
+            <p className="text-lg text-muted-foreground mb-8 max-w-md mx-auto">
+              {error}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button onClick={fetchProductsAndCategories} variant="outline">
+                Try Again
+              </Button>
+              <Button asChild>
+                <a href="/">Back to Home</a>
+              </Button>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (
@@ -205,7 +300,7 @@ export default function ProductsPage() {
             All Products
           </h1>
           <p className="text-lg text-muted-foreground mb-6">
-            Discover our complete collection of premium products
+            Discover our complete collection of {products.length} premium products
           </p>
           <ProductSearch
             searchQuery={searchQuery}
@@ -299,7 +394,7 @@ export default function ProductsPage() {
             <ProductGrid products={filteredProducts} viewMode={viewMode} />
 
             {/* No Results */}
-            {filteredProducts.length === 0 && (
+            {filteredProducts.length === 0 && products.length > 0 && (
               <div className="text-center py-16 lg:py-24 bg-background/50 rounded-3xl border">
                 <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-full flex items-center justify-center">
                   <Filter className="w-10 h-10 text-muted-foreground" />
@@ -318,6 +413,24 @@ export default function ProductsPage() {
                     <a href="/">Back to Home</a>
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {/* No Products at All */}
+            {products.length === 0 && (
+              <div className="text-center py-16 lg:py-24 bg-background/50 rounded-3xl border">
+                <div className="w-24 h-24 mx-auto mb-6 bg-muted rounded-full flex items-center justify-center">
+                  <Filter className="w-10 h-10 text-muted-foreground" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                  No products available
+                </h3>
+                <p className="text-muted-foreground mb-6 max-w-md mx-auto text-lg">
+                  There are no products in the database yet.
+                </p>
+                <Button asChild>
+                  <a href="/">Back to Home</a>
+                </Button>
               </div>
             )}
           </div>

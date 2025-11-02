@@ -10,8 +10,11 @@ import { ProductSearch } from "@/components/product-search"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
-import { Filter, Grid, List, Home, ChevronRight, Sparkles, TrendingUp } from "lucide-react"
+import { Filter, Grid, List, Home, ChevronRight, Sparkles, TrendingUp, SlidersHorizontal, X, Star, Zap, Clock, Shield, Truck, Tag, Award, Users, ShoppingBag } from "lucide-react"
 import { Product, Category, convertToProductComponent, convertToCategoryComponent } from "@/lib/types"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import Image from "next/image"
 
 export default function CategoryPage() {
   const params = useParams()
@@ -22,12 +25,13 @@ export default function CategoryPage() {
   const [allCategories, setAllCategories] = useState<Category[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>("")
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000])
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 50000])
   const [minRating, setMinRating] = useState<number>(0)
   const [sortBy, setSortBy] = useState<string>("featured")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   // Fetch category and products
   useEffect(() => {
@@ -69,8 +73,8 @@ export default function CategoryPage() {
       setCategoryProducts(convertedProducts)
       setAllCategories(convertedCategories)
     } catch (err) {
+      console.error('❌ Failed to fetch category data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load category')
-      console.error('Failed to fetch category data:', err)
     } finally {
       setIsLoading(false)
     }
@@ -144,7 +148,7 @@ export default function CategoryPage() {
   const clearFilters = () => {
     setSearchQuery("")
     setSelectedSubcategory("")
-    setPriceRange([0, 5000])
+    setPriceRange([0, 50000])
     setMinRating(0)
     setSortBy("featured")
   }
@@ -152,26 +156,93 @@ export default function CategoryPage() {
   const activeFilterCount = [
     searchQuery ? 1 : 0,
     selectedSubcategory ? 1 : 0,
-    priceRange[0] > 0 || priceRange[1] < 5000 ? 1 : 0,
+    priceRange[0] > 0 || priceRange[1] < 50000 ? 1 : 0,
     minRating > 0 ? 1 : 0,
   ].filter(Boolean).length
 
+  // Category-specific styling with banner images
+  const getCategoryTheme = (categoryName: string) => {
+    const themes: { [key: string]: { 
+      gradient: string, 
+      accent: string, 
+      icon: React.ReactNode,
+      bannerImage: string,
+      statsColor: string
+    } } = {
+      'Electronics': {
+        gradient: 'from-blue-500/20 via-purple-500/10 to-cyan-500/20',
+        accent: 'text-blue-400',
+        icon: <Zap className="w-5 h-5" />,
+        bannerImage: '/api/placeholder/1200/400?text=Electronics+Collection&bg=linear-gradient(135deg,#667eea,#764ba2)',
+        statsColor: 'bg-blue-500/20 text-blue-700'
+      },
+      'Fashion': {
+        gradient: 'from-pink-500/20 via-rose-500/10 to-red-500/20',
+        accent: 'text-pink-400',
+        icon: <Sparkles className="w-5 h-5" />,
+        bannerImage: '/api/placeholder/1200/400?text=Fashion+Collection&bg=linear-gradient(135deg,#f093fb,#f5576c)',
+        statsColor: 'bg-pink-500/20 text-pink-700'
+      },
+      'Home & Kitchen': {
+        gradient: 'from-green-500/20 via-emerald-500/10 to-teal-500/20',
+        accent: 'text-green-400',
+        icon: <Home className="w-5 h-5" />,
+        bannerImage: '/api/placeholder/1200/400?text=Home+%26+Kitchen&bg=linear-gradient(135deg,#4facfe,#00f2fe)',
+        statsColor: 'bg-green-500/20 text-green-700'
+      },
+      'Sports': {
+        gradient: 'from-orange-500/20 via-amber-500/10 to-yellow-500/20',
+        accent: 'text-orange-400',
+        icon: <TrendingUp className="w-5 h-5" />,
+        bannerImage: '/api/placeholder/1200/400?text=Sports+Equipment&bg=linear-gradient(135deg,#fa709a,#fee140)',
+        statsColor: 'bg-orange-500/20 text-orange-700'
+      },
+      'Books': {
+        gradient: 'from-indigo-500/20 via-violet-500/10 to-purple-500/20',
+        accent: 'text-indigo-400',
+        icon: <Star className="w-5 h-5" />,
+        bannerImage: '/api/placeholder/1200/400?text=Books+%26+Education&bg=linear-gradient(135deg,#a8edea,#fed6e3)',
+        statsColor: 'bg-indigo-500/20 text-indigo-700'
+      }
+    }
+    return themes[categoryName] || themes['Electronics']
+  }
+
+  const categoryTheme = category ? getCategoryTheme(category.name) : getCategoryTheme('Electronics')
+
+  // Calculate category stats
+  const categoryStats = useMemo(() => {
+    if (!categoryProducts.length) return null
+    
+    const prices = categoryProducts.map(p => p.price)
+    const ratings = categoryProducts.map(p => p.rating)
+    
+    return {
+      totalProducts: categoryProducts.length,
+      minPrice: Math.min(...prices),
+      maxPrice: Math.max(...prices),
+      avgRating: (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1),
+      featuredCount: categoryProducts.filter(p => p.featured).length,
+      inStockCount: categoryProducts.filter(p => p.inStock).length
+    }
+  }, [categoryProducts])
+
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#051933] to-[#3132DD]/10">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100/50">
         <Navigation />
         <main className="container mx-auto px-4 py-8">
           <div className="text-center py-16">
-            <div className="w-24 h-24 mx-auto mb-6 bg-white/10 rounded-full flex items-center justify-center">
-              <TrendingUp className="w-10 h-10 text-white/60" />
+            <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center">
+              <TrendingUp className="w-10 h-10 text-red-500" />
             </div>
-            <h1 className="text-4xl font-bold mb-4 text-white">
+            <h1 className="text-4xl font-bold mb-4 text-gray-900">
               Category Not Found
             </h1>
-            <p className="text-xl text-white/80 mb-8 max-w-md mx-auto">
+            <p className="text-xl text-gray-600 mb-8 max-w-md mx-auto">
               {error}
             </p>
-            <Button asChild className="bg-gradient-to-r from-[#3132DD] to-[#0088CC] hover:from-[#3132DD]/90 hover:to-[#0088CC]/90 text-white">
+            <Button asChild className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg">
               <a href="/">Back to Home</a>
             </Button>
           </div>
@@ -183,45 +254,43 @@ export default function CategoryPage() {
 
   if (isLoading || !category) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#051933] to-[#3132DD]/10">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100/50">
         <Navigation />
         <main className="container mx-auto px-4 py-8">
-          <div className="animate-pulse">
-            {/* Breadcrumb Skeleton */}
-            <div className="flex items-center space-x-2 mb-8">
-              <div className="h-4 bg-white/20 rounded w-24"></div>
-              <div className="h-4 bg-white/20 rounded w-4"></div>
-              <div className="h-4 bg-white/20 rounded w-32"></div>
-              <div className="h-4 bg-white/20 rounded w-4"></div>
-              <div className="h-4 bg-white/20 rounded w-20"></div>
-            </div>
+          {/* Breadcrumb Skeleton */}
+          <div className="flex items-center space-x-2 mb-8 animate-pulse">
+            <Skeleton className="h-4 w-24 bg-gray-200" />
+            <Skeleton className="h-4 w-4 bg-gray-200" />
+            <Skeleton className="h-4 w-32 bg-gray-200" />
+            <Skeleton className="h-4 w-4 bg-gray-200" />
+            <Skeleton className="h-4 w-20 bg-gray-200" />
+          </div>
 
-            {/* Category Header Skeleton */}
-            <div className="h-64 lg:h-80 bg-white/20 rounded-3xl mb-12"></div>
+          {/* Category Header Skeleton */}
+          <Skeleton className="h-64 lg:h-80 w-full rounded-3xl mb-12 bg-gradient-to-r from-gray-200 to-gray-300" />
 
-            {/* Content Skeleton */}
-            <div className="flex gap-8">
-              <div className="hidden lg:block w-80">
-                <div className="space-y-4">
-                  <div className="h-6 bg-white/20 rounded w-32"></div>
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-4 bg-white/20 rounded w-full"></div>
-                  ))}
-                </div>
+          {/* Content Skeleton */}
+          <div className="flex gap-8">
+            <div className="hidden lg:block w-80">
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-32 bg-gray-200" />
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-4 w-full bg-gray-200" />
+                ))}
               </div>
-              <div className="flex-1">
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i}>
-                      <div className="bg-white/20 rounded-2xl h-64 mb-4"></div>
-                      <div className="space-y-2">
-                        <div className="bg-white/20 rounded-lg h-4 w-3/4"></div>
-                        <div className="bg-white/20 rounded-lg h-4 w-1/2"></div>
-                        <div className="bg-white/20 rounded-lg h-6 w-1/3"></div>
-                      </div>
+            </div>
+            <div className="flex-1">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="animate-pulse">
+                    <Skeleton className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-2xl h-64 mb-4" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-3/4 bg-gray-200" />
+                      <Skeleton className="h-4 w-1/2 bg-gray-200" />
+                      <Skeleton className="h-6 w-1/3 bg-gray-200" />
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -232,246 +301,380 @@ export default function CategoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#051933] to-[#3132DD]/10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100/50">
       <Navigation />
 
       <main className="container mx-auto px-4 py-8">
         {/* Enhanced Breadcrumb */}
-        <Breadcrumb className="mb-8 animate-in fade-in duration-500">
+        <Breadcrumb className="mb-8">
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/" className="flex items-center gap-2 hover:text-[#0088CC] transition-colors text-white/80">
+              <BreadcrumbLink href="/" className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-colors duration-200">
                 <Home className="w-4 h-4" />
                 Home
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
-              <ChevronRight className="w-4 h-4 text-white/40" />
+              <ChevronRight className="w-4 h-4 text-gray-400" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
               <BreadcrumbLink 
                 href="/categories" 
-                className="hover:text-[#0088CC] transition-colors text-white/80"
+                className="text-gray-600 hover:text-blue-600 transition-colors duration-200"
               >
                 Categories
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
-              <ChevronRight className="w-4 h-4 text-white/40" />
+              <ChevronRight className="w-4 h-4 text-gray-400" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbLink className="text-[#0088CC] font-semibold">
+              <BreadcrumbLink className="font-semibold text-gray-900">
                 {category.name}
               </BreadcrumbLink>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
 
-        {/* Enhanced Category Header */}
-        <div className="mb-12 animate-in fade-in slide-in-from-top duration-700">
-          <div className="relative h-64 lg:h-80 rounded-3xl overflow-hidden mb-8 group">
-            <img
-              src={category.image || "/placeholder.svg"}
-              alt={category.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#051933]/80 via-[#051933]/40 to-transparent flex items-end">
-              <div className="p-8 lg:p-12 text-white w-full">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-3 h-8 bg-[#0088CC] rounded-full"></div>
-                  <span className="text-sm font-semibold tracking-wider opacity-90">
-                    {categoryProducts.length} Products
-                  </span>
-                </div>
-                <h1 className="text-4xl lg:text-6xl font-bold mb-4 tracking-tight">
+        {/* Enhanced Category Header with Banner Image */}
+        <div className="mb-12">
+          <div className="relative h-80 lg:h-96 rounded-3xl overflow-hidden mb-8 group shadow-2xl">
+            {/* Banner Image */}
+            <div className="absolute inset-0">
+              <img
+                src={category.image || categoryTheme.bannerImage}
+                alt={category.name}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent" />
+            </div>
+
+            {/* Content Overlay */}
+            <div className="relative h-full flex flex-col justify-end p-8 lg:p-12 text-white">
+              {/* Category Badge */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-3 h-8 ${categoryTheme.accent.replace('text', 'bg')} rounded-full`}></div>
+                <Badge className="bg-white/20 backdrop-blur-sm border-white/30 text-white px-4 py-2">
+                  <ShoppingBag className="w-3 h-3 mr-2" />
+                  Premium Collection
+                </Badge>
+              </div>
+
+              {/* Main Title */}
+              <div className="mb-6">
+                <h1 className="text-5xl lg:text-7xl font-bold mb-4 tracking-tight bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
                   {category.name}
                 </h1>
-                <p className="text-lg lg:text-xl opacity-90 max-w-2xl leading-relaxed">
+                <p className="text-xl lg:text-2xl opacity-90 max-w-2xl leading-relaxed bg-black/30 backdrop-blur-sm p-6 rounded-2xl border border-white/20">
                   {category.description}
                 </p>
               </div>
-            </div>
-            
-            {/* Floating elements */}
-            <div className="absolute top-6 right-6 bg-white/10 backdrop-blur-sm rounded-2xl p-4 shadow-2xl border border-white/20 animate-in fade-in zoom-in duration-1000 delay-300">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-[#0088CC]" />
-                <div>
-                  <div className="font-semibold text-sm text-white">Premium Collection</div>
-                  <div className="text-xs text-white/70">Curated quality</div>
+
+              {/* Quick Stats */}
+              {categoryStats && (
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                    <Tag className="w-4 h-4" />
+                    <span className="text-sm font-medium">{categoryStats.totalProducts} Products</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <span className="text-sm font-medium">{categoryStats.avgRating} Avg Rating</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                    <Award className="w-4 h-4" />
+                    <span className="text-sm font-medium">{categoryStats.featuredCount} Featured</span>
+                  </div>
                 </div>
+              )}
+            </div>
+
+            {/* Floating Elements */}
+            <div className="absolute top-6 right-6 flex flex-col gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 shadow-2xl border border-white/20">
+                <div className="flex items-center gap-3">
+                  {categoryTheme.icon}
+                  <div>
+                    <div className="font-semibold text-sm text-white">Premium Quality</div>
+                    <div className="text-xs text-white/70">100% Verified</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-green-500/20 to-emerald-600/30 backdrop-blur-sm rounded-2xl p-4 shadow-2xl border border-white/20">
+                <div className="flex items-center gap-3">
+                  <Truck className="w-4 h-4 text-green-300" />
+                  <div>
+                    <div className="font-semibold text-sm text-white">Free Delivery</div>
+                    <div className="text-xs text-white/70">On orders over ETB 500</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Left Elements */}
+            <div className="absolute bottom-6 left-6 flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                <Shield className="w-4 h-4 text-white" />
+                <span className="text-sm text-white font-medium">1 Year Warranty</span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+                <Clock className="w-4 h-4 text-white" />
+                <span className="text-sm text-white font-medium">24/7 Support</span>
               </div>
             </div>
           </div>
 
           {/* Enhanced Search and Sort */}
-          <ProductSearch
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-            productCount={filteredProducts.length}
-          />
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
+            <ProductSearch
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              productCount={filteredProducts.length}
+            />
+          </div>
         </div>
 
         <div className="flex gap-8">
           {/* Enhanced Desktop Filters Sidebar */}
-          <aside className="hidden lg:block w-80 flex-shrink-0 animate-in fade-in slide-in-from-left duration-500">
+          <aside className="hidden lg:block w-80 flex-shrink-0">
             <div className="sticky top-24 space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center gap-2 text-white">
-                  <Filter className="w-4 h-4" />
-                  Filters
-                </h3>
-                {activeFilterCount > 0 && (
-                  <Badge variant="secondary" className="animate-in zoom-in duration-200">
-                    {activeFilterCount} active
-                  </Badge>
-                )}
+              {/* Filters Card */}
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold flex items-center gap-2 text-gray-900">
+                    <SlidersHorizontal className="w-5 h-5" />
+                    Filters & Sorting
+                  </h3>
+                  {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200">
+                      {activeFilterCount} active
+                    </Badge>
+                  )}
+                </div>
+                
+                <ProductFilters
+                  categories={allCategories}
+                  selectedCategory={category.name}
+                  onCategoryChange={() => {}}
+                  selectedSubcategory={selectedSubcategory}
+                  onSubcategoryChange={setSelectedSubcategory}
+                  priceRange={priceRange}
+                  onPriceRangeChange={setPriceRange}
+                  minRating={minRating}
+                  onMinRatingChange={setMinRating}
+                  onClearFilters={clearFilters}
+                  activeFilterCount={activeFilterCount}
+                />
               </div>
-              
-              <ProductFilters
-                categories={allCategories}
-                selectedCategory={category.name}
-                onCategoryChange={() => {}}
-                selectedSubcategory={selectedSubcategory}
-                onSubcategoryChange={setSelectedSubcategory}
-                priceRange={priceRange}
-                onPriceRangeChange={setPriceRange}
-                minRating={minRating}
-                onMinRatingChange={setMinRating}
-                onClearFilters={clearFilters}
-                activeFilterCount={activeFilterCount}
-              />
+
+              {/* Category Stats Card */}
+              {categoryStats && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl p-6 border border-blue-200 shadow-lg">
+                  <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4" />
+                    Category Insights
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm text-gray-600">Total Products</span>
+                      </div>
+                      <span className="font-semibold text-gray-900">{categoryStats.totalProducts}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm text-gray-600">Price Range</span>
+                      </div>
+                      <span className="font-semibold text-gray-900 text-right">
+                        ETB {categoryStats.minPrice.toLocaleString()}<br/>
+                        - ETB {categoryStats.maxPrice.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                        <span className="text-sm text-gray-600">Avg Rating</span>
+                      </div>
+                      <span className="font-semibold text-gray-900">{categoryStats.avgRating}/5</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm text-gray-600">Featured</span>
+                      </div>
+                      <span className="font-semibold text-gray-900">{categoryStats.featuredCount}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
+                <h4 className="font-semibold text-gray-900 mb-4">Quick Actions</h4>
+                <div className="space-y-2">
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={clearFilters}>
+                    <X className="w-4 h-4" />
+                    Clear All Filters
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setSortBy('featured')}>
+                    <Star className="w-4 h-4" />
+                    Show Featured
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setPriceRange([0, 10000])}>
+                    <Tag className="w-4 h-4" />
+                    Under ETB 10K
+                  </Button>
+                </div>
+              </div>
             </div>
           </aside>
 
           {/* Main Content */}
           <div className="flex-1 min-w-0">
             {/* Enhanced Mobile Filters & View Toggle */}
-            <div className="flex items-center justify-between mb-8 p-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 animate-in fade-in duration-500">
-              <div className="flex items-center gap-3">
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      className="lg:hidden bg-white/10 backdrop-blur-sm border-white/20 hover:border-[#3132DD] hover:bg-[#3132DD]/20 transition-all duration-200 group relative text-white"
-                    >
-                      <Filter className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
-                      Filters
-                      {activeFilterCount > 0 && (
-                        <span className="absolute -top-2 -right-2 w-5 h-5 bg-[#3132DD] text-white text-xs rounded-full flex items-center justify-center animate-bounce">
-                          {activeFilterCount}
-                        </span>
-                      )}
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="w-80 sm:w-96 bg-[#051933] border-white/20">
-                    <div className="mt-6">
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-xl font-semibold text-white">Filters</h3>
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+                    <SheetTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="lg:hidden bg-white border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 group relative shadow-sm"
+                      >
+                        <Filter className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
+                        Filters
                         {activeFilterCount > 0 && (
-                          <Button 
-                            variant="ghost" 
-                            onClick={clearFilters} 
-                            className="text-sm text-white/80 hover:text-white"
-                          >
-                            Clear all
-                          </Button>
+                          <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center animate-bounce shadow-lg">
+                            {activeFilterCount}
+                          </span>
                         )}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-80 sm:w-96 bg-white border-gray-200 shadow-xl">
+                      <div className="mt-6">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-semibold text-gray-900">Filters & Sorting</h3>
+                          <div className="flex items-center gap-2">
+                            {activeFilterCount > 0 && (
+                              <Button 
+                                variant="ghost" 
+                                onClick={clearFilters} 
+                                className="text-sm text-gray-600 hover:text-gray-900"
+                              >
+                                Clear all
+                              </Button>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setMobileFiltersOpen(false)}
+                              className="hover:bg-gray-100"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <ProductFilters
+                          categories={allCategories}
+                          selectedCategory={category.name}
+                          onCategoryChange={() => {}}
+                          selectedSubcategory={selectedSubcategory}
+                          onSubcategoryChange={setSelectedSubcategory}
+                          priceRange={priceRange}
+                          onPriceRangeChange={setPriceRange}
+                          minRating={minRating}
+                          onMinRatingChange={setMinRating}
+                          onClearFilters={clearFilters}
+                          activeFilterCount={activeFilterCount}
+                        />
                       </div>
-                      <ProductFilters
-                        categories={allCategories}
-                        selectedCategory={category.name}
-                        onCategoryChange={() => {}}
-                        selectedSubcategory={selectedSubcategory}
-                        onSubcategoryChange={setSelectedSubcategory}
-                        priceRange={priceRange}
-                        onPriceRangeChange={setPriceRange}
-                        minRating={minRating}
-                        onMinRatingChange={setMinRating}
-                        onClearFilters={clearFilters}
-                        activeFilterCount={activeFilterCount}
-                      />
+                    </SheetContent>
+                  </Sheet>
+
+                  <div className="hidden sm:block">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Users className="w-4 h-4" />
+                      <span>
+                        Showing <span className="font-semibold text-gray-900">{filteredProducts.length}</span> of{" "}
+                        <span className="font-semibold text-gray-900">{categoryProducts.length}</span> products
+                      </span>
                     </div>
-                  </SheetContent>
-                </Sheet>
-
-                <div className="hidden sm:block">
-                  <span className="text-sm text-white/80">
-                    Showing <span className="font-semibold text-white">{filteredProducts.length}</span> of{" "}
-                    <span className="font-semibold text-white">{categoryProducts.length}</span> products
-                  </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Enhanced View Toggle */}
-              <div className="flex items-center gap-4">
-                <div className="hidden sm:block text-sm text-white/80">
-                  Sort: <span className="font-medium text-white">
-                    {sortBy === "featured" ? "Featured" :
-                     sortBy === "price-low" ? "Price: Low to High" :
-                     sortBy === "price-high" ? "Price: High to Low" :
-                     sortBy === "rating" ? "Top Rated" :
-                     sortBy === "newest" ? "Newest" : "Name"}
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-1 border-2 border-white/20 rounded-xl p-1 bg-white/5">
-                  <Button
-                    variant={viewMode === "grid" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("grid")}
-                    className={`rounded-lg transition-all duration-200 hover:scale-105 ${
-                      viewMode === "grid" 
-                        ? "bg-[#3132DD] text-white border-0" 
-                        : "text-white/80 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <Grid className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "list" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("list")}
-                    className={`rounded-lg transition-all duration-200 hover:scale-105 ${
-                      viewMode === "list" 
-                        ? "bg-[#3132DD] text-white border-0" 
-                        : "text-white/80 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <List className="w-4 h-4" />
-                  </Button>
+                {/* Enhanced View Toggle */}
+                <div className="flex items-center gap-4">
+                  <div className="hidden sm:block text-sm text-gray-600">
+                    Sort: <span className="font-medium text-gray-900">
+                      {sortBy === "featured" ? "Featured" :
+                       sortBy === "price-low" ? "Price: Low to High" :
+                       sortBy === "price-high" ? "Price: High to Low" :
+                       sortBy === "rating" ? "Top Rated" :
+                       sortBy === "newest" ? "Newest" : "Name"}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 border-2 border-gray-200 rounded-xl p-1 bg-gray-50 shadow-sm">
+                    <Button
+                      variant={viewMode === "grid" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("grid")}
+                      className={`rounded-lg transition-all duration-200 hover:scale-105 ${
+                        viewMode === "grid" 
+                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0 shadow-sm" 
+                          : "text-gray-600 hover:text-gray-900 hover:bg-white"
+                      }`}
+                    >
+                      <Grid className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("list")}
+                      className={`rounded-lg transition-all duration-200 hover:scale-105 ${
+                        viewMode === "list" 
+                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0 shadow-sm" 
+                          : "text-gray-600 hover:text-gray-900 hover:bg-white"
+                      }`}
+                    >
+                      <List className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Products Grid */}
-            <ProductGrid 
-              products={filteredProducts} 
-              viewMode={viewMode}
-            />
-
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-16 lg:py-24 bg-white/10 backdrop-blur-sm rounded-3xl border border-white/20 animate-in fade-in duration-500">
-                <div className="w-24 h-24 mx-auto mb-6 bg-white/10 rounded-full flex items-center justify-center">
-                  <Filter className="w-10 h-10 text-white/60" />
+            {filteredProducts.length > 0 ? (
+              <ProductGrid 
+                products={filteredProducts} 
+                viewMode={viewMode}
+              />
+            ) : (
+              <div className="text-center py-16 lg:py-24 bg-white rounded-3xl shadow-lg border border-gray-200">
+                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center shadow-lg">
+                  <Filter className="w-10 h-10 text-gray-400" />
                 </div>
-                <h3 className="text-2xl font-bold mb-3 text-white">
+                <h3 className="text-2xl font-bold mb-3 text-gray-900">
                   No products found
                 </h3>
-                <p className="text-white/80 mb-6 max-w-md mx-auto text-lg">
+                <p className="text-gray-600 mb-6 max-w-md mx-auto text-lg">
                   Try adjusting your search or filter criteria to find what you're looking for.
                 </p>
                 <div className="flex gap-3 justify-center">
                   <Button 
                     onClick={clearFilters} 
                     variant="outline"
-                    className="border-white/20 text-white hover:bg-white/10"
+                    className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 shadow-sm"
                   >
                     Clear all filters
                   </Button>
-                  <Button asChild className="bg-gradient-to-r from-[#3132DD] to-[#0088CC] hover:from-[#3132DD]/90 hover:to-[#0088CC]/90 text-white">
+                  <Button asChild className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg">
                     <a href="/categories">Browse All Categories</a>
                   </Button>
                 </div>
@@ -483,18 +686,5 @@ export default function CategoryPage() {
 
       <Footer />
     </div>
-  )
-}
-
-// Badge component for filter count
-function Badge({ variant = "secondary", className = "", children }: { variant?: "secondary" | "default", className?: string, children: React.ReactNode }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-      variant === "secondary" 
-        ? "bg-[#3132DD] text-white" 
-        : "bg-[#0088CC] text-white"
-    } ${className}`}>
-      {children}
-    </span>
   )
 }
