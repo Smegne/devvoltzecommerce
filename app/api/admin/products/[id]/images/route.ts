@@ -9,29 +9,39 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  console.log('🖼️ Starting image upload process...')
+  
   try {
     // AWAIT the params first
     const { id } = await params
+    console.log('📦 Product ID:', id)
+    
     const authHeader = request.headers.get('Authorization')
+    console.log('🔐 Auth header present:', !!authHeader)
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No valid Bearer token found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const token = authHeader.slice(7)
+    console.log('🔐 Token length:', token.length)
+
     const user = await getAuthUser(token)
+    console.log('👤 User found:', user ? `Role: ${user.role}` : 'No user')
     
-    if (!user || user.role !== 'admin') {
+    if (!user) {
+      console.log('❌ No user found from token')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (user.role !== 'admin') {
+      console.log('❌ User is not admin, role:', user.role)
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 })
     }
 
     const productId = id
-    const formData = await request.formData()
-    const images = formData.getAll('images') as File[]
-
-    if (!images || images.length === 0) {
-      return NextResponse.json({ error: 'No images provided' }, { status: 400 })
-    }
+    console.log('🛍️ Processing images for product:', productId)
 
     // Validate product exists
     const [products] = await pool.execute(
@@ -40,24 +50,43 @@ export async function POST(
     )
 
     if ((products as any[]).length === 0) {
+      console.log('❌ Product not found:', productId)
       return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    }
+
+    console.log('✅ Product validation passed')
+
+    // Get form data
+    const formData = await request.formData()
+    const images = formData.getAll('images') as File[]
+    console.log('📸 Images received:', images.length)
+
+    if (!images || images.length === 0) {
+      console.log('❌ No images provided')
+      return NextResponse.json({ error: 'No images provided' }, { status: 400 })
     }
 
     const uploadedImageUrls: string[] = []
 
     // Process each image
     for (const image of images) {
-      if (image.size === 0) continue
+      if (image.size === 0) {
+        console.log('⚠️ Skipping empty file')
+        continue
+      }
 
       // Validate file type
       if (!image.type.startsWith('image/')) {
-        continue // Skip non-image files
+        console.log('⚠️ Skipping non-image file:', image.type)
+        continue
       }
+
+      console.log('🖼️ Processing image:', image.name, 'Type:', image.type, 'Size:', image.size)
 
       // Generate unique filename
       const timestamp = Date.now()
       const randomString = Math.random().toString(36).substring(2, 15)
-      const fileExtension = image.type.split('/')[1] || 'jpg'
+      const fileExtension = image.name.split('.').pop() || 'jpg'
       const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
 
       // Convert image to buffer
@@ -69,21 +98,33 @@ export async function POST(
       const filePath = join(uploadDir, fileName)
       const publicUrl = `/uploads/products/${fileName}`
 
+      console.log('📁 Upload directory:', uploadDir)
+      console.log('💾 File path:', filePath)
+      console.log('🌐 Public URL:', publicUrl)
+
       // Create directory if it doesn't exist
       if (!existsSync(uploadDir)) {
+        console.log('📂 Creating upload directory...')
         await mkdir(uploadDir, { recursive: true })
+        console.log('✅ Upload directory created')
       }
 
       // Save file to public folder
+      console.log('💿 Writing file...')
       await writeFile(filePath, buffer)
+      console.log('✅ File saved successfully')
+      
       uploadedImageUrls.push(publicUrl)
       
-      console.log(`✅ Image saved: ${publicUrl}`)
+      console.log(`✅ Image processed: ${publicUrl}`)
     }
 
     if (uploadedImageUrls.length === 0) {
+      console.log('❌ No valid images uploaded after processing')
       return NextResponse.json({ error: 'No valid images uploaded' }, { status: 400 })
     }
+
+    console.log('📊 Total uploaded images:', uploadedImageUrls.length)
 
     // Get current images from database
     const [currentProduct] = await pool.execute(
@@ -96,14 +137,18 @@ export async function POST(
 
     try {
       existingImages = JSON.parse(currentImages)
-    } catch {
+      console.log('📋 Existing images count:', existingImages.length)
+    } catch (error) {
+      console.log('⚠️ Error parsing existing images, starting fresh')
       existingImages = []
     }
 
     // Replace placeholder with actual images
     const updatedImages = [...uploadedImageUrls]
+    console.log('🔄 Final images array:', updatedImages)
 
     // Update product with new images
+    console.log('💾 Updating database...')
     await pool.execute(
       'UPDATE products SET images = ? WHERE id = ?',
       [JSON.stringify(updatedImages), productId]
@@ -120,6 +165,14 @@ export async function POST(
 
   } catch (error) {
     console.error('❌ Image upload error:', error)
+    
+    // More detailed error logging
+    if (error instanceof Error) {
+      console.error('❌ Error name:', error.name)
+      console.error('❌ Error message:', error.message)
+      console.error('❌ Error stack:', error.stack)
+    }
+    
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error instanceof Error ? error.message : 'Unknown error'
