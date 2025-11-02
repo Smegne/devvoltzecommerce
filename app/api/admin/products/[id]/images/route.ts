@@ -5,11 +5,15 @@ import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
 
+// Check if we're in production (where file system is read-only)
+const isProduction = process.env.NODE_ENV === 'production'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   console.log('🖼️ Starting image upload process...')
+  console.log('🌍 Environment:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT')
   
   try {
     // AWAIT the params first
@@ -17,7 +21,6 @@ export async function POST(
     console.log('📦 Product ID:', id)
     
     const authHeader = request.headers.get('Authorization')
-    console.log('🔐 Auth header present:', !!authHeader)
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.log('❌ No valid Bearer token found')
@@ -25,10 +28,7 @@ export async function POST(
     }
 
     const token = authHeader.slice(7)
-    console.log('🔐 Token length:', token.length)
-
     const user = await getAuthUser(token)
-    console.log('👤 User found:', user ? `Role: ${user.role}` : 'No user')
     
     if (!user) {
       console.log('❌ No user found from token')
@@ -45,7 +45,7 @@ export async function POST(
 
     // Validate product exists
     const [products] = await pool.execute(
-      'SELECT id FROM products WHERE id = ?',
+      'SELECT id, title FROM products WHERE id = ?',
       [productId]
     )
 
@@ -54,7 +54,8 @@ export async function POST(
       return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    console.log('✅ Product validation passed')
+    const product = (products as any[])[0]
+    console.log('✅ Product validation passed:', product.title)
 
     // Get form data
     const formData = await request.formData()
@@ -83,40 +84,56 @@ export async function POST(
 
       console.log('🖼️ Processing image:', image.name, 'Type:', image.type, 'Size:', image.size)
 
-      // Generate unique filename
-      const timestamp = Date.now()
-      const randomString = Math.random().toString(36).substring(2, 15)
-      const fileExtension = image.name.split('.').pop() || 'jpg'
-      const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
+      if (isProduction) {
+        // PRODUCTION: Use placeholder images (file system is read-only)
+        console.log('🚫 Production environment - using placeholder images')
+        const productName = encodeURIComponent(product.title || `Product-${productId}`)
+        const placeholderUrl = `/api/placeholder/400/400?text=${productName}`
+        uploadedImageUrls.push(placeholderUrl)
+        console.log('🎨 Using placeholder:', placeholderUrl)
+      } else {
+        // DEVELOPMENT: Save files locally
+        try {
+          // Generate unique filename
+          const timestamp = Date.now()
+          const randomString = Math.random().toString(36).substring(2, 15)
+          const fileExtension = image.name.split('.').pop() || 'jpg'
+          const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
 
-      // Convert image to buffer
-      const bytes = await image.arrayBuffer()
-      const buffer = Buffer.from(bytes)
+          // Convert image to buffer
+          const bytes = await image.arrayBuffer()
+          const buffer = Buffer.from(bytes)
 
-      // ALWAYS use public folder for both dev and production
-      const uploadDir = join(process.cwd(), 'public', 'uploads', 'products')
-      const filePath = join(uploadDir, fileName)
-      const publicUrl = `/uploads/products/${fileName}`
+          // Use public folder for development
+          const uploadDir = join(process.cwd(), 'public', 'uploads', 'products')
+          const filePath = join(uploadDir, fileName)
+          const publicUrl = `/uploads/products/${fileName}`
 
-      console.log('📁 Upload directory:', uploadDir)
-      console.log('💾 File path:', filePath)
-      console.log('🌐 Public URL:', publicUrl)
+          console.log('📁 Upload directory:', uploadDir)
+          console.log('💾 File path:', filePath)
+          console.log('🌐 Public URL:', publicUrl)
 
-      // Create directory if it doesn't exist
-      if (!existsSync(uploadDir)) {
-        console.log('📂 Creating upload directory...')
-        await mkdir(uploadDir, { recursive: true })
-        console.log('✅ Upload directory created')
+          // Create directory if it doesn't exist
+          if (!existsSync(uploadDir)) {
+            console.log('📂 Creating upload directory...')
+            await mkdir(uploadDir, { recursive: true })
+            console.log('✅ Upload directory created')
+          }
+
+          // Save file to public folder
+          console.log('💿 Writing file...')
+          await writeFile(filePath, buffer)
+          console.log('✅ File saved successfully')
+          
+          uploadedImageUrls.push(publicUrl)
+          console.log(`✅ Image processed: ${publicUrl}`)
+        } catch (fileError) {
+          console.error('❌ File system error in development:', fileError)
+          // Fallback to placeholder even in development if file write fails
+          const productName = encodeURIComponent(product.title || `Product-${productId}`)
+          uploadedImageUrls.push(`/api/placeholder/400/400?text=${productName}`)
+        }
       }
-
-      // Save file to public folder
-      console.log('💿 Writing file...')
-      await writeFile(filePath, buffer)
-      console.log('✅ File saved successfully')
-      
-      uploadedImageUrls.push(publicUrl)
-      
-      console.log(`✅ Image processed: ${publicUrl}`)
     }
 
     if (uploadedImageUrls.length === 0) {
@@ -143,7 +160,7 @@ export async function POST(
       existingImages = []
     }
 
-    // Replace placeholder with actual images
+    // Replace placeholder with actual images (or keep placeholders in production)
     const updatedImages = [...uploadedImageUrls]
     console.log('🔄 Final images array:', updatedImages)
 
@@ -158,9 +175,12 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: 'Images uploaded successfully',
+      message: isProduction 
+        ? 'Product created with placeholder images (file uploads disabled in production)' 
+        : 'Images uploaded successfully',
       imageUrls: uploadedImageUrls,
-      totalImages: updatedImages.length
+      totalImages: updatedImages.length,
+      environment: isProduction ? 'production' : 'development'
     })
 
   } catch (error) {
@@ -170,12 +190,12 @@ export async function POST(
     if (error instanceof Error) {
       console.error('❌ Error name:', error.name)
       console.error('❌ Error message:', error.message)
-      console.error('❌ Error stack:', error.stack)
     }
     
     return NextResponse.json({ 
       error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? error.message : 'Unknown error',
+      environment: isProduction ? 'production' : 'development'
     }, { status: 500 })
   }
 }

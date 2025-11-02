@@ -233,34 +233,38 @@ export async function POST(request: NextRequest) {
     console.log('✅ Product created successfully, ID:', productId)
 
     // Upload images if provided
-    if (imageFiles.length > 0) {
-      console.log('📸 Uploading product images...')
-      
-      const imageFormData = new FormData()
-      imageFiles.forEach(file => {
-        imageFormData.append('images', file)
-      })
+   // Upload images if provided
+if (imageFiles.length > 0) {
+  console.log('📸 Uploading product images...')
+  
+  const imageFormData = new FormData()
+  imageFiles.forEach(file => {
+    imageFormData.append('images', file)
+  })
 
-      try {
-        const imageResponse = await fetch(`${request.nextUrl.origin}/api/admin/products/${productId}/images`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: imageFormData
-        })
+  try {
+    const imageResponse = await fetch(`${request.nextUrl.origin}/api/admin/products/${productId}/images`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: imageFormData
+    })
 
-        if (imageResponse.ok) {
-          const imageResult = await imageResponse.json()
-          console.log('✅ Images uploaded successfully:', imageResult.imageUrls)
-        } else {
-          console.error('❌ Failed to upload images:', await imageResponse.text())
-        }
-      } catch (imageError) {
-        console.error('❌ Image upload failed:', imageError)
-      }
+    if (imageResponse.ok) {
+      const imageResult = await imageResponse.json()
+      console.log('✅ Images processed successfully:', imageResult.imageUrls)
+      console.log('🌍 Environment note:', imageResult.environment)
+    } else {
+      const errorText = await imageResponse.text()
+      console.error('❌ Failed to process images:', errorText)
+      // Don't fail the product creation if image upload fails
     }
-    
+  } catch (imageError) {
+    console.error('❌ Image processing failed:', imageError)
+    // Don't fail the product creation if image upload fails
+  }
+}
     return NextResponse.json({ 
       success: true, 
       productId,
