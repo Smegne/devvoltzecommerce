@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import pool from '@/lib/db'
 
-
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; imageId: string }> }

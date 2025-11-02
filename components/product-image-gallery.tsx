@@ -37,16 +37,36 @@ export function ProductImageGallery({ images, productName, productId }: ProductI
   const [newImageType, setNewImageType] = useState<GalleryImage['image_type']>('angle')
   const { user } = useAuth()
 
+  // ENHANCED: Fix image URLs for production
+  const fixImageUrl = (url: string): string => {
+    if (!url) return `/api/placeholder/400/400?text=${encodeURIComponent(productName)}`
+    
+    // Handle local upload paths - these now work in both dev and production
+    if (url.startsWith('/uploads/')) {
+      return url
+    }
+    
+    // Handle external placeholder URLs
+    if (url.includes('via.placeholder.com') || url.includes('placeholder.com')) {
+      return `/api/placeholder/400/400?text=${encodeURIComponent(productName)}`
+    }
+    
+    return url
+  }
+
   // Combine main product images with gallery images
   const allImages = [
     ...images.map((url, index) => ({
       id: `main-${index}`,
-      image_url: url,
+      image_url: fixImageUrl(url),
       alt_text: `${productName} - Main Image ${index + 1}`,
       image_type: 'main' as const,
       sort_order: index
     })),
-    ...galleryImages
+    ...galleryImages.map(img => ({
+      ...img,
+      image_url: fixImageUrl(img.image_url)
+    }))
   ].sort((a, b) => a.sort_order - b.sort_order)
 
   // Filter images based on selected filter
@@ -255,7 +275,7 @@ export function ProductImageGallery({ images, productName, productId }: ProductI
                 {galleryImages.map((galleryImage) => (
                   <div key={galleryImage.id} className="relative group">
                     <img
-                      src={galleryImage.image_url}
+                      src={fixImageUrl(galleryImage.image_url)}
                       alt={galleryImage.alt_text}
                       className="w-full h-20 object-cover rounded-lg border border-white/20"
                     />

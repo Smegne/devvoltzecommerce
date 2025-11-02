@@ -25,7 +25,7 @@ export async function GET(
     const imagesArray = Array.isArray(images) ? images : []
     console.log('✅ Gallery images fetched:', imagesArray.length)
 
-    // Ensure all image URLs are properly formatted
+    // ENHANCED: Ensure all image URLs are properly formatted for production
     const formattedImages = imagesArray.map((img: any) => ({
       ...img,
       image_url: img.image_url || `/api/placeholder/400/400?text=Gallery+Image`
@@ -97,7 +97,7 @@ export async function POST(
       )
     }
 
-    // Create uploads directory if it doesn't exist
+    // ENHANCED: Always use public folder for both dev and production
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products', 'gallery')
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true })
@@ -149,7 +149,7 @@ export async function POST(
         const buffer = Buffer.from(bytes)
         await writeFile(filePath, buffer)
 
-        // Create URL for frontend access
+        // ENHANCED: Use public folder URL that works in both dev and production
         const imageUrl = `/uploads/products/gallery/${fileName}`
 
         console.log(`🖼️ Inserting gallery image ${i + 1}:`, image.name)
@@ -217,7 +217,7 @@ export async function POST(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; imageId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
@@ -231,7 +231,14 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
-    const { id: productId, imageId } = await params
+    const { searchParams } = new URL(request.url)
+    const imageId = searchParams.get('imageId')
+
+    if (!imageId) {
+      return NextResponse.json({ success: false, error: 'Image ID is required' }, { status: 400 })
+    }
+
+    const { id: productId } = await params
     const { image_type } = await request.json()
 
     await pool.execute(
@@ -255,7 +262,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; imageId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
@@ -269,7 +276,14 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
-    const { id: productId, imageId } = await params
+    const { searchParams } = new URL(request.url)
+    const imageId = searchParams.get('imageId')
+
+    if (!imageId) {
+      return NextResponse.json({ success: false, error: 'Image ID is required' }, { status: 400 })
+    }
+
+    const { id: productId } = await params
 
     await pool.execute(
       'DELETE FROM product_gallery WHERE id = ? AND product_id = ?',
