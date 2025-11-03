@@ -20,10 +20,7 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
   const [imageError, setImageError] = useState(false)
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("ET", {
-      style: "currency",
-      currency: "ETB",
-    }).format(price)
+    return `${price.toLocaleString('en-ET')} birr`
   }
 
   const handleAddToCart = async (event: React.MouseEvent) => {
@@ -59,35 +56,36 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
     setImageError(true)
   }
 
- // FIXED: Enhanced image URL handling for both dev and production
-const getImageSrc = () => {
-  // If image already failed or no image, use placeholder
-  if (imageError || !product.images?.[0]) {
-    return `/api/placeholder/400/400?text=${encodeURIComponent(product.name)}`
-  }
-  
-  let imageUrl = product.images[0]
-  
-  // Handle local upload paths
-  if (imageUrl.startsWith('/uploads/')) {
-    // In production, serve from public folder
-    if (process.env.NODE_ENV === 'production') {
-      // Remove the leading slash and serve from public folder
-      const publicPath = imageUrl.substring(1) // removes first '/'
-      return `/${publicPath}`
+  // FIXED: Enhanced image URL handling for both dev and production
+  const getImageSrc = () => {
+    // If image already failed or no image, use placeholder
+    if (imageError || !product.images?.[0]) {
+      return `/api/placeholder/400/400?text=${encodeURIComponent(product.name)}`
     }
-    // In development, keep the original path
+    
+    let imageUrl = product.images[0]
+    
+    // Handle local upload paths
+    if (imageUrl.startsWith('/uploads/')) {
+      // In production, serve from public folder
+      if (process.env.NODE_ENV === 'production') {
+        // Remove the leading slash and serve from public folder
+        const publicPath = imageUrl.substring(1) // removes first '/'
+        return `/${publicPath}`
+      }
+      // In development, keep the original path
+      return imageUrl
+    }
+    
+    // Handle external placeholder URLs
+    if (imageUrl.includes('via.placeholder.com') || imageUrl.includes('placeholder.com')) {
+      return `/api/placeholder/400/400?text=${encodeURIComponent(product.name)}`
+    }
+    
+    // Return the original URL for other cases
     return imageUrl
   }
-  
-  // Handle external placeholder URLs
-  if (imageUrl.includes('via.placeholder.com') || imageUrl.includes('placeholder.com')) {
-    return `/api/placeholder/400/400?text=${encodeURIComponent(product.name)}`
-  }
-  
-  // Return the original URL for other cases
-  return imageUrl
-}
+
   if (viewMode === "list") {
     return (
       <Card className="group hover:shadow-xl transition-all duration-500 border-muted/50 hover:border-muted bg-background/50 backdrop-blur-sm overflow-hidden">
