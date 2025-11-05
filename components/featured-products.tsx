@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Star, ShoppingCart, Heart, Eye, Zap, ArrowRight, TrendingUp, Shield, Clock } from "lucide-react"
+import { Star, ShoppingCart, Heart, Eye, Zap, ArrowRight, TrendingUp, Shield, Clock, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,7 +23,6 @@ export function FeaturedProducts() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
-  const { addItem } = useCart()
 
   useEffect(() => {
     fetchFeaturedProducts()
@@ -87,23 +86,6 @@ export function FeaturedProducts() {
       style: "currency",
       currency: "ETB",
     }).format(price)
-  }
-
-  const handleAddToCart = (productId: number, event: React.MouseEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    addItem(productId.toString())
-    
-    // Safe animation feedback - check if element exists
-    const button = event.currentTarget as HTMLButtonElement
-    if (button && button.classList) {
-      button.classList.add('scale-95')
-      setTimeout(() => {
-        if (button.classList) {
-          button.classList.remove('scale-95')
-        }
-      }, 150)
-    }
   }
 
   if (error && products.length === 0) {
@@ -215,7 +197,6 @@ export function FeaturedProducts() {
               index={index}
               getImageSrc={getImageSrc}
               onImageError={() => handleImageError(product.id)}
-              onAddToCart={handleAddToCart}
               formatPrice={formatPrice}
             />
           ))}
@@ -246,15 +227,63 @@ interface FeaturedProductCardProps {
   index: number
   getImageSrc: (product: Product) => string
   onImageError: () => void
-  onAddToCart: (productId: number, event: React.MouseEvent) => void
   formatPrice: (price: number) => string
 }
 
-function FeaturedProductCard({ product, index, getImageSrc, onImageError, onAddToCart, formatPrice }: FeaturedProductCardProps) {
+function FeaturedProductCard({ product, index, getImageSrc, onImageError, formatPrice }: FeaturedProductCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false)
-  
+  const { addItem, isInCart } = useCart()
+  const [isAdding, setIsAdding] = useState(false)
+  const [isProductInCart, setIsProductInCart] = useState(false)
+
+  // Update cart status when cart changes
+  useState(() => {
+    setIsProductInCart(isInCart(product.id.toString()))
+  })
+
   const stockPercentage = Math.min(100, (product.stockCount / 50) * 100)
   const isLowStock = product.stockCount > 0 && product.stockCount <= 10
+
+  const handleAddToCart = async (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    
+    setIsAdding(true)
+    
+    try {
+      const success = await addItem(product.id.toString(), product)
+      
+      if (success) {
+        // Success feedback
+        const button = event.currentTarget as HTMLButtonElement
+        if (button && button.classList) {
+          button.classList.add('scale-95', 'bg-green-500')
+          setTimeout(() => {
+            if (button.classList) {
+              button.classList.remove('scale-95', 'bg-green-500')
+            }
+          }, 300)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to add to cart:', error)
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  const getButtonText = () => {
+    if (isAdding) return "Adding..."
+    if (isProductInCart) return "Added to Cart"
+    if (!product.inStock) return "Out of Stock"
+    return "Add to Cart"
+  }
+
+  const getButtonVariant = () => {
+    if (isProductInCart) return "success"
+    if (!product.inStock) return "outline"
+    return "default"
+  }
 
   return (
     <Card 
@@ -278,12 +307,17 @@ function FeaturedProductCard({ product, index, getImageSrc, onImageError, onAddT
           {/* Enhanced Overlay with actions */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center space-x-2 opacity-0 group-hover:opacity-100">
             <Button 
-              variant="secondary" 
+              variant={isProductInCart ? "success" : "secondary"}
               size="icon"
-              className="rounded-full bg-white/90 backdrop-blur-sm hover:bg-white hover:scale-110 transition-all duration-200 shadow-lg border-0"
-              onClick={(e) => onAddToCart(product.id, e)}
+              className={`rounded-full backdrop-blur-sm hover:scale-110 transition-all duration-200 shadow-lg ${
+                isProductInCart 
+                  ? 'bg-green-500 hover:bg-green-600 text-white' 
+                  : 'bg-white/90 hover:bg-white'
+              }`}
+              onClick={handleAddToCart}
+              disabled={!product.inStock || isAdding || isProductInCart}
             >
-              <ShoppingCart className="h-4 w-4" />
+              {isProductInCart ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
             </Button>
             <Button 
               variant="secondary" 
@@ -322,6 +356,11 @@ function FeaturedProductCard({ product, index, getImageSrc, onImageError, onAddT
             {product.discountPrice && (
               <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 shadow-lg">
                 {Math.round(((product.price - product.discountPrice) / product.price) * 100)}% OFF
+              </Badge>
+            )}
+            {isProductInCart && (
+              <Badge className="bg-green-500 text-white border-0 shadow-lg">
+                In Cart
               </Badge>
             )}
           </div>
@@ -385,12 +424,21 @@ function FeaturedProductCard({ product, index, getImageSrc, onImageError, onAddT
 
       <CardFooter className="p-4 pt-0">
         <Button
-          className="w-full group hover:bg-primary/90 transition-all duration-200 hover:scale-105 shadow-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 border-0"
-          onClick={(e) => onAddToCart(product.id, e)}
-          disabled={!product.inStock}
+          variant={getButtonVariant()}
+          className={`w-full group transition-all duration-200 hover:scale-105 shadow-lg ${
+            isProductInCart 
+              ? 'bg-green-500 hover:bg-green-600 text-white' 
+              : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 border-0'
+          }`}
+          onClick={handleAddToCart}
+          disabled={!product.inStock || isAdding || isProductInCart}
         >
-          <ShoppingCart className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
-          {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+          {isProductInCart ? (
+            <Check className="w-4 h-4 mr-2" />
+          ) : (
+            <ShoppingCart className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
+          )}
+          {getButtonText()}
         </Button>
       </CardFooter>
     </Card>

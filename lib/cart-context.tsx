@@ -1,3 +1,4 @@
+// lib/cart-context.tsx
 "use client"
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
@@ -22,6 +23,21 @@ interface CartContextType {
   isInCart: (productId: string) => boolean
   loading: boolean
   syncCartWithServer: () => Promise<void>
+  // Enhanced UX states
+  recentlyAdded: string | null
+  showCartNotification: boolean
+  hideCartNotification: () => void
+  // Cart persistence
+  saveCartToLocalStorage: () => void
+  loadCartFromLocalStorage: () => void
+  // Cart operations
+  incrementQuantity: (productId: string) => void
+  decrementQuantity: (productId: string) => void
+  getItemQuantity: (productId: string) => number
+  // Cart validation
+  validateCart: () => Promise<{ valid: boolean; errors: string[] }>
+  // Bulk operations
+  addMultipleItems: (items: { productId: string; product?: Product; quantity: number }[]) => Promise<boolean>
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -29,7 +45,20 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null)
+  const [showCartNotification, setShowCartNotification] = useState(false)
   const router = useRouter()
+
+  // Initialize cart from localStorage on mount
+  useEffect(() => {
+    loadCartFromLocalStorage()
+    syncCartWithServer()
+  }, [])
+
+  // Save cart to localStorage whenever items change
+  useEffect(() => {
+    saveCartToLocalStorage()
+  }, [items])
 
   // Get token from localStorage
   const getToken = () => {
@@ -39,36 +68,83 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return null
   }
 
-  // Check if user is authenticated
-  const isAuthenticated = () => {
-    return !!getToken()
+  // Get user ID from localStorage or session
+  const getUserId = () => {
+    if (typeof window !== 'undefined') {
+      const userData = localStorage.getItem('user')
+      if (userData) {
+        try {
+          const user = JSON.parse(userData)
+          return user.id
+        } catch (error) {
+          console.error('Error parsing user data:', error)
+        }
+      }
+    }
+    return null
   }
 
-  // Sync cart with server on component mount
-  useEffect(() => {
-    syncCartWithServer()
-  }, [])
-
-  // Add event listener for cart updates
-  useEffect(() => {
-    const handleCartUpdate = () => {
-      console.log('🛒 Cart update event received, syncing with server...')
-      syncCartWithServer()
+  // Local Storage Management
+  const saveCartToLocalStorage = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cartData = {
+          items,
+          timestamp: Date.now(),
+          version: '1.0'
+        }
+        localStorage.setItem('devvoltz_cart', JSON.stringify(cartData))
+      } catch (error) {
+        console.error('Error saving cart to localStorage:', error)
+      }
     }
+  }
 
-    window.addEventListener('cartUpdated', handleCartUpdate)
+  const loadCartFromLocalStorage = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedCart = localStorage.getItem('devvoltz_cart')
+        if (savedCart) {
+          const cartData = JSON.parse(savedCart)
+          // Check if cart is not too old (e.g., 7 days)
+          if (Date.now() - cartData.timestamp < 7 * 24 * 60 * 60 * 1000) {
+            setItems(cartData.items || [])
+          } else {
+            // Clear expired cart
+            localStorage.removeItem('devvoltz_cart')
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cart from localStorage:', error)
+        // Clear corrupted cart data
+        localStorage.removeItem('devvoltz_cart')
+      }
+    }
+  }
+
+  // Notification Management
+  const showNotification = (productName: string) => {
+    setRecentlyAdded(productName)
+    setShowCartNotification(true)
     
-    return () => {
-      window.removeEventListener('cartUpdated', handleCartUpdate)
-    }
-  }, [])
+    // Auto-hide notification after 4 seconds
+    setTimeout(() => {
+      hideCartNotification()
+    }, 4000)
+  }
 
+  const hideCartNotification = () => {
+    setShowCartNotification(false)
+    setTimeout(() => {
+      setRecentlyAdded(null)
+    }, 300)
+  }
+
+  // Server Synchronization
   const syncCartWithServer = async () => {
     try {
       setLoading(true)
       const token = getToken()
-      
-      console.log('🛒 Syncing cart with server, token exists:', !!token)
       
       if (!token) {
         console.log('🛒 No token found, using local cart only')
@@ -131,7 +207,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         })
         
-        setItems(serverItems)
+        // Merge server items with local items, prioritizing server data
+        setItems(prevItems => {
+          const mergedItems = [...serverItems]
+          // Add local items that aren't on server (for offline support)
+          prevItems.forEach(localItem => {
+            if (!serverItems.find(serverItem => serverItem.productId === localItem.productId)) {
+              mergedItems.push(localItem)
+            }
+          })
+          return mergedItems
+        })
       } else {
         console.error('❌ Failed to sync cart:', response.status, response.statusText)
       }
@@ -142,6 +228,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Core Cart Operations
   const addItem = async (productId: string, product?: Product): Promise<boolean> => {
     const token = getToken()
     
@@ -186,6 +273,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
       return [...current, { productId, quantity: 1, product }]
     })
+
+    // Show notification
+    if (product) {
+      showNotification(product.name)
+    }
 
     // Sync with server since user is authenticated
     try {
@@ -304,21 +396,104 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const getCartCount = () => {
+  // Quantity Helpers
+  const incrementQuantity = (productId: string) => {
+    const currentItem = items.find(item => item.productId === productId)
+    if (currentItem) {
+      updateQuantity(productId, currentItem.quantity + 1)
+    }
+  }
+
+  const decrementQuantity = (productId: string) => {
+    const currentItem = items.find(item => item.productId === productId)
+    if (currentItem) {
+      updateQuantity(productId, currentItem.quantity - 1)
+    }
+  }
+
+  const getItemQuantity = (productId: string): number => {
+    const item = items.find(item => item.productId === productId)
+    return item ? item.quantity : 0
+  }
+
+  // Cart Information Getters
+  const getCartCount = (): number => {
     return items.reduce((total, item) => total + item.quantity, 0)
   }
 
-  const getCartItems = () => {
+  const getCartItems = (): CartItem[] => {
     return items
   }
 
-  const getCartTotal = () => {
+  const getCartTotal = (): number => {
     return items.reduce((total, item) => {
       const price = item.product?.price || 0
       return total + (price * item.quantity)
     }, 0)
   }
 
+  const isInCart = (productId: string): boolean => {
+    return items.some(item => item.productId === productId)
+  }
+
+  // Bulk Operations
+  const addMultipleItems = async (itemsToAdd: { productId: string; product?: Product; quantity: number }[]): Promise<boolean> => {
+    const token = getToken()
+    
+    if (!token) {
+      console.log('🛒 User not logged in, cannot add multiple items')
+      return false
+    }
+
+    try {
+      // Update local state
+      setItems(current => {
+        const updatedItems = [...current]
+        itemsToAdd.forEach(newItem => {
+          const existingIndex = updatedItems.findIndex(item => item.productId === newItem.productId)
+          if (existingIndex >= 0) {
+            updatedItems[existingIndex] = {
+              ...updatedItems[existingIndex],
+              quantity: updatedItems[existingIndex].quantity + newItem.quantity,
+              product: newItem.product || updatedItems[existingIndex].product
+            }
+          } else {
+            updatedItems.push({
+              productId: newItem.productId,
+              quantity: newItem.quantity,
+              product: newItem.product
+            })
+          }
+        })
+        return updatedItems
+      })
+
+      // Sync with server
+      const response = await fetch('/api/cart/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ items: itemsToAdd })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`)
+      }
+
+      setTimeout(() => {
+        syncCartWithServer()
+      }, 100)
+
+      return true
+    } catch (error) {
+      console.error('❌ Failed to add multiple items:', error)
+      return false
+    }
+  }
+
+  // Cart Management
   const clearCart = async () => {
     const token = getToken()
     
@@ -351,8 +526,59 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const isInCart = (productId: string) => {
-    return items.some(item => item.productId === productId)
+  // Cart Validation
+  const validateCart = async (): Promise<{ valid: boolean; errors: string[] }> => {
+    const errors: string[] = []
+    
+    // Check for items that are out of stock
+    const outOfStockItems = items.filter(item => !item.product?.inStock)
+    if (outOfStockItems.length > 0) {
+      errors.push(`Some items are out of stock: ${outOfStockItems.map(item => item.product?.name).join(', ')}`)
+    }
+
+    // Check for items with insufficient stock
+    const insufficientStockItems = items.filter(item => {
+      const product = item.product
+      return product && product.inStock && item.quantity > product.stockCount
+    })
+    
+    if (insufficientStockItems.length > 0) {
+      errors.push(`Insufficient stock for: ${insufficientStockItems.map(item => 
+        `${item.product?.name} (max: ${item.product?.stockCount})`
+      ).join(', ')}`)
+    }
+
+    // Check for items that no longer exist
+    const invalidItems = items.filter(item => !item.product)
+    if (invalidItems.length > 0) {
+      errors.push(`Some items are no longer available`)
+    }
+
+    // If we have a token, we can do server-side validation
+    const token = getToken()
+    if (token) {
+      try {
+        const response = await fetch('/api/cart/validate', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
+        if (response.ok) {
+          const serverValidation = await response.json()
+          if (!serverValidation.valid && serverValidation.errors) {
+            errors.push(...serverValidation.errors)
+          }
+        }
+      } catch (error) {
+        console.error('Error during server cart validation:', error)
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    }
   }
 
   // Function to check for pending cart items after login
@@ -396,7 +622,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
       clearCart,
       isInCart,
       loading,
-      syncCartWithServer
+      syncCartWithServer,
+      recentlyAdded,
+      showCartNotification,
+      hideCartNotification,
+      saveCartToLocalStorage,
+      loadCartFromLocalStorage,
+      incrementQuantity,
+      decrementQuantity,
+      getItemQuantity,
+      validateCart,
+      addMultipleItems
     }}>
       {children}
     </CartContext.Provider>

@@ -1,7 +1,9 @@
+// components/product-info.tsx
 "use client"
 
 import { useState } from "react"
-import { Star, Heart, Share2, Truck, Shield, Check, Clock } from "lucide-react"
+import Link from "next/link"
+import { Star, Heart, Share2, Truck, Shield, Check, Clock, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -15,7 +17,14 @@ interface ProductInfoProps {
 export function ProductInfo({ product }: ProductInfoProps) {
   const [selectedQuantity, setSelectedQuantity] = useState(1)
   const [isWishlisted, setIsWishlisted] = useState(false)
-  const { addItem } = useCart()
+  const { addItem, isInCart } = useCart()
+  const [isAdding, setIsAdding] = useState(false)
+  const [isProductInCart, setIsProductInCart] = useState(false)
+
+  // Update cart status
+  useState(() => {
+    setIsProductInCart(isInCart(product.id.toString()))
+  })
 
   if (!product) {
     return (
@@ -36,7 +45,15 @@ export function ProductInfo({ product }: ProductInfoProps) {
 
   const handleAddToCart = async () => {
     if (product) {
-      await addItem(product.id.toString(), product)
+      setIsAdding(true)
+      try {
+        await addItem(product.id.toString(), product)
+        // The cart context will update isProductInCart automatically
+      } catch (error) {
+        console.error('Failed to add to cart:', error)
+      } finally {
+        setIsAdding(false)
+      }
     }
   }
 
@@ -61,6 +78,13 @@ export function ProductInfo({ product }: ProductInfoProps) {
   const discountPercentage = product.original_price && product.original_price > product.price
     ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
     : 0
+
+  const getButtonText = () => {
+    if (isAdding) return "Adding to Cart..."
+    if (isProductInCart) return "Added to Cart"
+    if (!product.inStock) return "Out of Stock"
+    return "Add to Cart"
+  }
 
   return (
     <div className="space-y-6">
@@ -135,12 +159,10 @@ export function ProductInfo({ product }: ProductInfoProps) {
                 <Check className="w-4 h-4 text-[#0088CC]" />
                 <span>{tag}</span>
               </div>
-
-              
             ))
           ) : (
             <div className="text-white/60 text-sm">
-             see below for details.
+              See below for details.
             </div>
           )}
         </div>
@@ -182,11 +204,20 @@ export function ProductInfo({ product }: ProductInfoProps) {
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
         <Button
-          className="flex-1 bg-gradient-to-r from-[#3132DD] to-[#0088CC] hover:from-[#3132DD]/90 hover:to-[#0088CC]/90 text-white py-3 text-lg transition-all duration-200 hover:scale-105 shadow-lg border-0"
+          className={`flex-1 py-3 text-lg transition-all duration-200 hover:scale-105 shadow-lg border-0 ${
+            isProductInCart
+              ? 'bg-green-500 hover:bg-green-600 text-white'
+              : 'bg-gradient-to-r from-[#3132DD] to-[#0088CC] hover:from-[#3132DD]/90 hover:to-[#0088CC]/90 text-white'
+          }`}
           onClick={handleAddToCart}
-          disabled={!product.inStock}
+          disabled={!product.inStock || isAdding || isProductInCart}
         >
-          {product.inStock ? "Add to Cart" : "Out of Stock"}
+          {isProductInCart ? (
+            <Check className="w-5 h-5 mr-2" />
+          ) : (
+            <ShoppingCart className="w-5 h-5 mr-2" />
+          )}
+          {getButtonText()}
         </Button>
         
         <Button
@@ -208,6 +239,19 @@ export function ProductInfo({ product }: ProductInfoProps) {
           <Share2 className="w-5 h-5" />
         </Button>
       </div>
+
+      {/* Cart Status Indicator */}
+      {isProductInCart && (
+        <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <Check className="w-4 h-4 text-green-400" />
+            <span className="text-sm text-green-400 font-medium">Added to cart</span>
+          </div>
+          <p className="text-sm text-green-400/80 mt-1">
+            This item is in your shopping cart. <Link href="/cart" className="underline hover:text-green-300">View cart</Link>
+          </p>
+        </div>
+      )}
 
       {/* Shipping & Benefits */}
       <div className="space-y-4 pt-6 border-t border-white/20">

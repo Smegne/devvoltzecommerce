@@ -572,7 +572,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                         </h4>
                         <ol className="text-sm text-white/80 space-y-2 list-decimal list-inside">
                           <li>Open your Telebirr app</li>
-                          <li>Send payment to: <strong className="text-white">+251 9XX XXX XXX</strong></li>
+                          <li>Send payment to: <strong className="text-white">+251 962935163</strong></li>
                           <li>Take a screenshot of the payment confirmation</li>
                           <li>Upload the screenshot below</li>
                         </ol>
@@ -616,8 +616,8 @@ const handleSubmit = async (e: React.FormEvent) => {
                         </h4>
                         <div className="text-sm text-white/80 space-y-2">
                           <p><strong className="text-white">Bank:</strong> Commercial Bank of Ethiopia</p>
-                          <p><strong className="text-white">Account Name:</strong> DevVoltz Market</p>
-                          <p><strong className="text-white">Account Number:</strong> 1000 1234 5678</p>
+                          <p><strong className="text-white"></strong> </p>
+                          <p><strong className="text-white">Account Number:</strong> 1000433547741</p>
                           <p><strong className="text-white">Reference:</strong> Your Order ID</p>
                         </div>
                       </div>

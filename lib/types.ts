@@ -671,3 +671,33 @@ export function validateProductData(product: any): boolean {
   if (!product.title && !product.name) return false
   return true
 }
+
+
+// Add these to your existing types
+export interface Review {
+  id: number
+  product_id: number
+  user_id: number
+  rating: number
+  title: string
+  comment: string
+  verified_purchase: boolean
+  created_at: string
+  user?: {
+    name: string
+    email: string
+  }
+  helpful_count?: number
+  not_helpful_count?: number
+  user_vote?: 'helpful' | 'not_helpful' | null
+}
+
+export interface ReviewStats {
+  average_rating: number
+  total_reviews: number
+  rating_distribution: {
+    stars: number
+    count: number
+  }[]
+}
+

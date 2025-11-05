@@ -1,8 +1,9 @@
+// components/product-card.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Star, ShoppingCart, Heart, Eye } from "lucide-react"
+import { Star, ShoppingCart, Heart, Eye, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,9 +16,15 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, viewMode }: ProductCardProps) {
-  const { addItem } = useCart()
+  const { addItem, isInCart, recentlyAdded } = useCart()
   const [isAdding, setIsAdding] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [isProductInCart, setIsProductInCart] = useState(false)
+
+  // Update cart status when cart changes
+  useEffect(() => {
+    setIsProductInCart(isInCart(product.id.toString()))
+  }, [isInCart, product.id])
 
   const formatPrice = (price: number) => {
     return `${price.toLocaleString('en-ET')} birr`
@@ -33,7 +40,7 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
       const success = await addItem(product.id.toString(), product)
       
       if (success) {
-        // Success feedback - safely check for classList
+        // Success feedback
         const button = event.currentTarget as HTMLButtonElement
         if (button && button.classList) {
           button.classList.add('scale-95', 'bg-green-500')
@@ -44,7 +51,6 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
           }, 300)
         }
       }
-      // If not successful (redirect happened), no need for feedback
     } catch (error) {
       console.error('Failed to add to cart:', error)
     } finally {
@@ -56,34 +62,39 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
     setImageError(true)
   }
 
-  // FIXED: Enhanced image URL handling for both dev and production
   const getImageSrc = () => {
-    // If image already failed or no image, use placeholder
     if (imageError || !product.images?.[0]) {
       return `/api/placeholder/400/400?text=${encodeURIComponent(product.name)}`
     }
     
     let imageUrl = product.images[0]
     
-    // Handle local upload paths
     if (imageUrl.startsWith('/uploads/')) {
-      // In production, serve from public folder
       if (process.env.NODE_ENV === 'production') {
-        // Remove the leading slash and serve from public folder
-        const publicPath = imageUrl.substring(1) // removes first '/'
+        const publicPath = imageUrl.substring(1)
         return `/${publicPath}`
       }
-      // In development, keep the original path
       return imageUrl
     }
     
-    // Handle external placeholder URLs
     if (imageUrl.includes('via.placeholder.com') || imageUrl.includes('placeholder.com')) {
       return `/api/placeholder/400/400?text=${encodeURIComponent(product.name)}`
     }
     
-    // Return the original URL for other cases
     return imageUrl
+  }
+
+  const getButtonText = () => {
+    if (isAdding) return "Adding..."
+    if (isProductInCart) return "Added to Cart"
+    if (!product.inStock) return "Out of Stock"
+    return "Add to Cart"
+  }
+
+  const getButtonVariant = () => {
+    if (isProductInCart) return "success"
+    if (!product.inStock) return "outline"
+    return "default"
   }
 
   if (viewMode === "list") {
@@ -156,14 +167,22 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
               {/* Action Buttons */}
               <div className="flex items-center space-x-2">
                 <Button
-                  variant="outline"
+                  variant={getButtonVariant()}
                   size="sm"
-                  className="group hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                  className={`group transition-all duration-200 ${
+                    isProductInCart 
+                      ? 'bg-green-500 hover:bg-green-600 text-white' 
+                      : 'hover:bg-primary hover:text-primary-foreground'
+                  }`}
                   onClick={handleAddToCart}
-                  disabled={!product.inStock || isAdding}
+                  disabled={!product.inStock || isAdding || isProductInCart}
                 >
-                  <ShoppingCart className="w-4 h-4 mr-2" />
-                  {isAdding ? "Adding..." : "Add to Cart"}
+                  {isProductInCart ? (
+                    <Check className="w-4 h-4 mr-2" />
+                  ) : (
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                  )}
+                  {getButtonText()}
                 </Button>
                 <Button variant="ghost" size="icon">
                   <Heart className="w-4 h-4" />
@@ -193,7 +212,7 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
     )
   }
 
-  // Grid View (default)
+  // Grid View
   return (
     <Card className="group hover:shadow-2xl transition-all duration-500 border-muted/50 hover:border-muted bg-background/50 backdrop-blur-sm overflow-hidden hover:-translate-y-1">
       <CardContent className="p-0 relative">
@@ -210,13 +229,17 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
           {/* Overlay with actions */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center space-x-2 opacity-0 group-hover:opacity-100">
             <Button 
-              variant="secondary" 
+              variant={isProductInCart ? "success" : "secondary"}
               size="icon"
-              className="rounded-full bg-background/80 backdrop-blur-sm hover:bg-background hover:scale-110 transition-all duration-200 shadow-lg"
+              className={`rounded-full backdrop-blur-sm hover:scale-110 transition-all duration-200 shadow-lg ${
+                isProductInCart 
+                  ? 'bg-green-500 hover:bg-green-600 text-white' 
+                  : 'bg-background/80 hover:bg-background'
+              }`}
               onClick={handleAddToCart}
-              disabled={!product.inStock || isAdding}
+              disabled={!product.inStock || isAdding || isProductInCart}
             >
-              <ShoppingCart className="h-4 w-4" />
+              {isProductInCart ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
             </Button>
             <Button 
               variant="secondary" 
@@ -244,6 +267,11 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
             {product.featured && (
               <Badge className="bg-primary text-primary-foreground border-0 shadow-lg">
                 Featured
+              </Badge>
+            )}
+            {isProductInCart && (
+              <Badge className="bg-green-500 text-white border-0 shadow-lg">
+                In Cart
               </Badge>
             )}
           </div>
@@ -297,12 +325,21 @@ export function ProductCard({ product, viewMode }: ProductCardProps) {
 
       <CardFooter className="p-4 pt-0">
         <Button
-          className="w-full group hover:bg-primary/90 transition-all duration-200 hover:scale-105 shadow-lg"
+          variant={getButtonVariant()}
+          className={`w-full group transition-all duration-200 hover:scale-105 shadow-lg ${
+            isProductInCart 
+              ? 'bg-green-500 hover:bg-green-600 text-white' 
+              : ''
+          }`}
           onClick={handleAddToCart}
-          disabled={!product.inStock || isAdding}
+          disabled={!product.inStock || isAdding || isProductInCart}
         >
-          <ShoppingCart className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
-          {isAdding ? "Adding..." : (product.inStock ? 'Add to Cart' : 'Out of Stock')}
+          {isProductInCart ? (
+            <Check className="w-4 h-4 mr-2" />
+          ) : (
+            <ShoppingCart className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
+          )}
+          {getButtonText()}
         </Button>
       </CardFooter>
     </Card>
