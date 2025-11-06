@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, ShoppingCart, User, Menu, X, ChevronDown } from "lucide-react"
+import { Search, ShoppingCart, User, Menu, X, ChevronDown, Rocket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -141,6 +141,14 @@ export function Navigation() {
 
           {/* Right Side Actions */}
           <div className="flex items-center space-x-2">
+            {/* Boost Your Shop Link - NEW */}
+            <Link href="/tradershop" className="hidden lg:block">
+              <Button className="bg-gradient-to-r from-[#FF6B35] to-[#F7931E] hover:from-[#FF6B35]/90 hover:to-[#F7931E]/90 transition-all duration-200 hover:scale-105 shadow-lg border-0 text-white font-medium">
+                <Rocket className="h-4 w-4 mr-2" />
+                Boost Your Shop
+              </Button>
+            </Link>
+
             {/* Mobile Search */}
             <Button 
               variant="ghost" 
@@ -210,11 +218,11 @@ export function Navigation() {
                     Login
                   </Button>
                 </Link>
-                <Link href="/register">
+                {/* <Link href="/register">
                   <Button className="bg-gradient-to-r from-[#3132DD] to-[#0088CC] hover:from-[#3132DD]/90 hover:to-[#0088CC]/90 transition-all duration-200 hover:scale-105 shadow-lg border-0">
                     Sign Up
                   </Button>
-                </Link>
+                </Link> */}
               </div>
             )}
 
@@ -275,6 +283,16 @@ export function Navigation() {
                       </Link>
                     ))}
                   </nav>
+
+                  {/* Boost Your Shop Link for Mobile - NEW */}
+                  <div className="py-4 border-t border-white/20">
+                    <Link href="/tradershop" onClick={() => setMobileMenuOpen(false)}>
+                      <Button className="w-full bg-gradient-to-r from-[#FF6B35] to-[#F7931E] hover:from-[#FF6B35]/90 hover:to-[#F7931E]/90 transition-all duration-200 hover:scale-105 shadow-lg border-0 text-white font-medium">
+                        <Rocket className="h-4 w-4 mr-2" />
+                        Boost Your Shop
+                      </Button>
+                    </Link>
+                  </div>
 
                   {/* Mobile Auth */}
                   <div className="border-t border-white/20 pt-6 space-y-4">
