@@ -152,10 +152,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { v2 as cloudinary } from 'cloudinary';
 
-// For Vercel deployment, we need to use a different approach for file storage
-// Since Vercel has ephemeral file system, we'll store files in a cloud service
-// For now, we'll skip file storage in production or use base64 encoding
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: 'dpphit1yt',
+  api_key: '328153496631566',
+  api_secret: '_2EfSTbOu4lBuxMhG9xeUaEwFx0'
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -171,20 +175,8 @@ export async function POST(request: NextRequest) {
     const shopDescription = formData.get('shopDescription') as string;
     const shopLogo = formData.get('shopLogo') as File | null;
 
-    console.log('🔍 Trader Registration - Received data:', {
-      name: name?.substring(0, 10) + '...',
-      shopName: shopName?.substring(0, 10) + '...',
-      email: email?.substring(0, 10) + '...',
-      phone: phone?.substring(0, 5) + '...',
-      hasPassword: !!password,
-      hasAddress: !!shopAddress,
-      hasLogo: !!shopLogo,
-      logoSize: shopLogo?.size || 0
-    });
-
-    // Enhanced validation
+    // Basic validation
     if (!name || !shopName || !email || !phone || !password || !shopAddress) {
-      console.log('❌ Missing required fields');
       return NextResponse.json(
         { success: false, message: 'All required fields must be filled' },
         { status: 400 }
@@ -234,13 +226,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let shopLogoPath = null;
+    let shopLogoUrl = null;
 
-    // Handle file upload with Vercel-compatible approach
+    // Handle file upload to Cloudinary
     if (shopLogo && shopLogo.size > 0) {
       try {
-        console.log('📁 Processing file upload...');
-        
         // Validate file type
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
         if (!allowedTypes.includes(shopLogo.type)) {
@@ -258,63 +248,47 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // For Vercel deployment, we have two options:
-        // Option 1: Convert to base64 and store in database (not recommended for large files)
-        // Option 2: Upload to cloud storage (recommended)
-        // Option 3: Skip file storage in production for now
+        console.log('🔄 Uploading image to Cloudinary...');
         
-        const isProduction = process.env.NODE_ENV === 'production';
+        // Convert File to Buffer
+        const bytes = await shopLogo.arrayBuffer();
+        const buffer = Buffer.from(bytes);
         
-        if (isProduction) {
-          console.log('🌐 Production environment - skipping file storage for now');
-          // In production, you should upload to cloud storage like:
-          // - AWS S3
-          // - Cloudinary
-          // - Vercel Blob Storage
-          // For now, we'll just store a placeholder
-          shopLogoPath = '/images/shop-logo-placeholder.png';
-          console.log('ℹ️ Using placeholder logo in production');
-        } else {
-          // Development - local file storage
-          const fs = await import('fs/promises');
-          const path = await import('path');
-          
-          const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'shop-logos');
-          console.log('📁 Upload directory:', uploadsDir);
-          
-          // Create directory if it doesn't exist
-          try {
-            await fs.access(uploadsDir);
-          } catch {
-            await fs.mkdir(uploadsDir, { recursive: true });
-          }
-
-          // Generate unique filename
-          const fileExtension = path.extname(shopLogo.name);
-          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}${fileExtension}`;
-          const relativePath = `/uploads/shop-logos/${fileName}`;
-          const absolutePath = path.join(uploadsDir, fileName);
-
-          console.log('📁 Saving file to:', absolutePath);
-
-          // Convert File to Buffer and save
-          const bytes = await shopLogo.arrayBuffer();
-          const buffer = Buffer.from(bytes);
-          
-          await fs.writeFile(absolutePath, buffer);
-          shopLogoPath = relativePath;
-        }
+        // Convert buffer to base64
+        const base64Image = `data:${shopLogo.type};base64,${buffer.toString('base64')}`;
         
-        console.log('✅ File processed successfully:', shopLogoPath);
+        // Upload to Cloudinary
+        const uploadResult = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload(
+            base64Image,
+            {
+              folder: 'devvoltz/shop-logos',
+              public_id: `shop-logo-${Date.now()}`,
+              overwrite: false,
+              resource_type: 'image',
+              transformation: [
+                { width: 500, height: 500, crop: 'limit' },
+                { quality: 'auto' },
+                { format: 'auto' }
+              ]
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          );
+        }) as any;
 
-      } catch (fileError) {
-        console.error('❌ File upload error:', fileError);
-        // Don't fail the entire registration if file upload fails
-        console.log('⚠️ Continuing without shop logo due to upload error');
-        shopLogoPath = null;
+        shopLogoUrl = uploadResult.secure_url;
+        console.log('✅ Image uploaded to Cloudinary:', shopLogoUrl);
+
+      } catch (uploadError) {
+        console.error('❌ Cloudinary upload failed:', uploadError);
+        return NextResponse.json(
+          { success: false, message: 'Failed to upload shop logo. Please try again.' },
+          { status: 500 }
+        );
       }
-    } else {
-      console.log('ℹ️ No shop logo provided or empty file');
     }
 
     // Start transaction
@@ -322,37 +296,33 @@ export async function POST(request: NextRequest) {
     await connection.beginTransaction();
 
     try {
-      console.log('🔐 Hashing password...');
       // Hash password
       const hashedPassword = await hashPassword(password);
 
-      console.log('👤 Creating user...');
       // Create user
       const [userResult] = await connection.execute(
         'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-        [name, email, hashedPassword, 'customer']
+        [name, email, hashedPassword, 'customer'] // Start as customer, can be upgraded to trader after approval
       );
 
       const userId = (userResult as any).insertId;
-      console.log('✅ User created with ID:', userId);
 
-      console.log('📝 Creating user profile...');
       // Create user profile with phone
       await connection.execute(
         'INSERT INTO user_profiles (user_id, phone) VALUES (?, ?)',
         [userId, phone]
       );
 
-      console.log('🏪 Creating trader application...');
       // Create trader application
       await connection.execute(
         `INSERT INTO traders (user_id, shop_name, phone, shop_address, shop_description, shop_logo, status) 
          VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
-        [userId, shopName, phone, shopAddress, shopDescription || null, shopLogoPath]
+        [userId, shopName, phone, shopAddress, shopDescription || null, shopLogoUrl]
       );
 
       await connection.commit();
-      console.log('✅ Transaction committed successfully');
+
+      console.log('✅ Trader registration successful for:', email);
 
       return NextResponse.json({
         success: true,
@@ -360,38 +330,18 @@ export async function POST(request: NextRequest) {
         userId
       });
 
-    } catch (dbError) {
+    } catch (error) {
       await connection.rollback();
-      console.error('❌ Database transaction error:', dbError);
-      
-      // More specific error messages
-      let errorMessage = 'Database error occurred';
-      if (dbError instanceof Error) {
-        if (dbError.message.includes('Duplicate entry')) {
-          errorMessage = 'Email or shop name already exists';
-        } else if (dbError.message.includes('ECONNREFUSED')) {
-          errorMessage = 'Database connection failed';
-        }
-      }
-      
-      throw new Error(errorMessage);
+      console.error('❌ Database transaction failed:', error);
+      throw error;
     } finally {
       connection.release();
     }
 
   } catch (error) {
     console.error('❌ Trader registration error:', error);
-    
-    let errorMessage = 'Internal server error';
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    }
-
     return NextResponse.json(
-      { 
-        success: false, 
-        message: errorMessage 
-      },
+      { success: false, message: 'Internal server error' },
       { status: 500 }
     );
   }
@@ -408,8 +358,6 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    console.log('🔍 Fetching trader data for user:', userId);
 
     // Get trader data
     const [traders] = await pool.execute(
@@ -435,7 +383,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Get trader error:', error);
+    console.error('Get trader error:', error);
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }
