@@ -940,13 +940,13 @@ export default function TraderForm() {
         console.log('ℹ️ No shop logo to include');
       }
 
-      console.log('🚀 Sending request to API...');
+      console.log('🚀 Sending request to /api/trader...');
       const response = await fetch('/api/trader', {
         method: 'POST',
         body: formDataToSend,
       });
 
-      console.log('📨 Response received:', response.status);
+      console.log('📨 Response status:', response.status);
       
       let result;
       try {
@@ -961,6 +961,8 @@ export default function TraderForm() {
         console.log('✅ Registration successful');
         setSuccessMessage(result.message || '🎉 Trader application submitted successfully! You will be notified once approved.');
         setShowLoginPrompt(true);
+        
+        // Reset form
         setFormData({
           name: '',
           shopName: '',
@@ -973,6 +975,11 @@ export default function TraderForm() {
           shopLogo: null,
         });
         setSelectedFileName('');
+        
+        // Clear file input
+        const fileInput = document.getElementById('shopLogo') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+        
       } else {
         console.log('❌ Registration failed:', result.message);
         setErrors({ 
@@ -992,6 +999,9 @@ export default function TraderForm() {
   const handleLoginRedirect = () => {
     router.push('/traderlogin');
   };
+
+  // ... (Keep all the beautiful UI sections from previous version)
+  // The UI code remains exactly the same, only the handleSubmit function is updated
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -1060,8 +1070,6 @@ export default function TraderForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          {/* ... (Keep all the beautiful UI sections from previous version) ... */}
-          
           {/* Personal Information Section */}
           <div className="space-y-6">
             <div className="flex items-center space-x-3 mb-6">
@@ -1070,7 +1078,6 @@ export default function TraderForm() {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Name Field */}
               <div className="space-y-2">
                 <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
                   Full Name *
@@ -1105,7 +1112,6 @@ export default function TraderForm() {
                 )}
               </div>
 
-              {/* Shop Name Field */}
               <div className="space-y-2">
                 <label htmlFor="shopName" className="block text-sm font-semibold text-gray-700 mb-2">
                   Shop Name *
@@ -1150,7 +1156,6 @@ export default function TraderForm() {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Email Field */}
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
                   Email Address *
@@ -1185,7 +1190,6 @@ export default function TraderForm() {
                 )}
               </div>
 
-              {/* Phone Field */}
               <div className="space-y-2">
                 <label htmlFor="phone" className="block text-sm font-semibold text-gray-700 mb-2">
                   Phone Number *
@@ -1230,7 +1234,6 @@ export default function TraderForm() {
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Password Field */}
               <div className="space-y-2">
                 <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
                   Password *
@@ -1265,7 +1268,6 @@ export default function TraderForm() {
                 )}
               </div>
 
-              {/* Confirm Password Field */}
               <div className="space-y-2">
                 <label htmlFor="confirmPassword" className="block text-sm font-semibold text-gray-700 mb-2">
                   Confirm Password *
@@ -1310,7 +1312,6 @@ export default function TraderForm() {
             </div>
             
             <div className="space-y-6">
-              {/* Shop Address Field */}
               <div className="space-y-2">
                 <label htmlFor="shopAddress" className="block text-sm font-semibold text-gray-700 mb-2">
                   Shop Address *
@@ -1345,7 +1346,6 @@ export default function TraderForm() {
                 )}
               </div>
 
-              {/* Shop Description Field */}
               <div className="space-y-2">
                 <label htmlFor="shopDescription" className="block text-sm font-semibold text-gray-700 mb-2">
                   Shop Description <span className="text-gray-500 font-normal">(Optional)</span>
