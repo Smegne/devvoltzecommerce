@@ -152,16 +152,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
-import { v2 as cloudinary } from 'cloudinary';
 
-// Configure Cloudinary
+// Cloudinary configuration
+const cloudinary = require('cloudinary').v2;
+
 cloudinary.config({
-  cloud_name: 'dpphit1yt',
-  api_key: '328153496631566',
-  api_secret: '_2EfSTbOu4lBuxMhG9xeUaEwFx0'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dpphit1yt',
+  api_key: process.env.CLOUDINARY_API_KEY || '328153496631566',
+  api_secret: process.env.CLOUDINARY_API_SECRET || '_2EfSTbOu4lBuxMhG9xeUaEwFx0'
 });
 
 export async function POST(request: NextRequest) {
+  console.log('🔄 Starting trader registration...');
+  
   try {
     const formData = await request.formData();
     
@@ -175,8 +178,11 @@ export async function POST(request: NextRequest) {
     const shopDescription = formData.get('shopDescription') as string;
     const shopLogo = formData.get('shopLogo') as File | null;
 
+    console.log('📝 Form data received:', { name, shopName, email, phone });
+
     // Basic validation
     if (!name || !shopName || !email || !phone || !password || !shopAddress) {
+      console.log('❌ Missing required fields');
       return NextResponse.json(
         { success: false, message: 'All required fields must be filled' },
         { status: 400 }
@@ -186,6 +192,7 @@ export async function POST(request: NextRequest) {
     // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
+      console.log('❌ Invalid email format:', email);
       return NextResponse.json(
         { success: false, message: 'Please provide a valid email address' },
         { status: 400 }
@@ -194,6 +201,7 @@ export async function POST(request: NextRequest) {
 
     // Password strength validation
     if (password.length < 6) {
+      console.log('❌ Password too short');
       return NextResponse.json(
         { success: false, message: 'Password must be at least 6 characters long' },
         { status: 400 }
@@ -207,6 +215,7 @@ export async function POST(request: NextRequest) {
     );
 
     if ((existingUsers as any[]).length > 0) {
+      console.log('❌ Email already exists:', email);
       return NextResponse.json(
         { success: false, message: 'Email already registered' },
         { status: 400 }
@@ -220,6 +229,7 @@ export async function POST(request: NextRequest) {
     );
 
     if ((existingTraders as any[]).length > 0) {
+      console.log('❌ Shop name already exists:', shopName);
       return NextResponse.json(
         { success: false, message: 'Shop name already taken' },
         { status: 400 }
@@ -230,10 +240,13 @@ export async function POST(request: NextRequest) {
 
     // Handle file upload to Cloudinary
     if (shopLogo && shopLogo.size > 0) {
+      console.log('🖼️ Processing shop logo upload...');
+      
       try {
         // Validate file type
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
         if (!allowedTypes.includes(shopLogo.type)) {
+          console.log('❌ Invalid file type:', shopLogo.type);
           return NextResponse.json(
             { success: false, message: 'Only JPG and PNG files are allowed' },
             { status: 400 }
@@ -242,77 +255,72 @@ export async function POST(request: NextRequest) {
 
         // Validate file size (5MB)
         if (shopLogo.size > 5 * 1024 * 1024) {
+          console.log('❌ File too large:', shopLogo.size);
           return NextResponse.json(
             { success: false, message: 'File size must be less than 5MB' },
             { status: 400 }
           );
         }
 
-        console.log('🔄 Uploading image to Cloudinary...');
+        console.log('☁️ Uploading to Cloudinary...');
         
-        // Convert File to Buffer
-        const bytes = await shopLogo.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        
-        // Convert buffer to base64
+        // Convert File to buffer and then to base64
+        const arrayBuffer = await shopLogo.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         const base64Image = `data:${shopLogo.type};base64,${buffer.toString('base64')}`;
-        
+
         // Upload to Cloudinary
-        const uploadResult = await new Promise((resolve, reject) => {
-          cloudinary.uploader.upload(
-            base64Image,
-            {
-              folder: 'devvoltz/shop-logos',
-              public_id: `shop-logo-${Date.now()}`,
-              overwrite: false,
-              resource_type: 'image',
-              transformation: [
-                { width: 500, height: 500, crop: 'limit' },
-                { quality: 'auto' },
-                { format: 'auto' }
-              ]
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          );
-        }) as any;
+        const uploadResult = await cloudinary.uploader.upload(base64Image, {
+          folder: 'devvoltz/shop-logos',
+          public_id: `shop_${Date.now()}`,
+          overwrite: false,
+          resource_type: 'auto',
+          transformation: [
+            { width: 400, height: 400, crop: 'limit' },
+            { quality: 'auto' },
+            { format: 'auto' }
+          ]
+        });
 
         shopLogoUrl = uploadResult.secure_url;
-        console.log('✅ Image uploaded to Cloudinary:', shopLogoUrl);
+        console.log('✅ Cloudinary upload successful:', shopLogoUrl);
 
       } catch (uploadError) {
         console.error('❌ Cloudinary upload failed:', uploadError);
-        return NextResponse.json(
-          { success: false, message: 'Failed to upload shop logo. Please try again.' },
-          { status: 500 }
-        );
+        // Don't fail the entire registration if image upload fails
+        console.log('⚠️ Continuing registration without logo due to upload error');
       }
+    } else {
+      console.log('ℹ️ No shop logo provided, continuing without logo');
     }
 
-    // Start transaction
+    // Start database transaction
     const connection = await pool.getConnection();
     await connection.beginTransaction();
 
     try {
+      console.log('🔐 Hashing password...');
       // Hash password
       const hashedPassword = await hashPassword(password);
 
+      console.log('👤 Creating user...');
       // Create user
       const [userResult] = await connection.execute(
         'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-        [name, email, hashedPassword, 'customer'] // Start as customer, can be upgraded to trader after approval
+        [name, email, hashedPassword, 'customer']
       );
 
       const userId = (userResult as any).insertId;
+      console.log('✅ User created with ID:', userId);
 
+      console.log('📞 Creating user profile...');
       // Create user profile with phone
       await connection.execute(
         'INSERT INTO user_profiles (user_id, phone) VALUES (?, ?)',
         [userId, phone]
       );
 
+      console.log('🏪 Creating trader application...');
       // Create trader application
       await connection.execute(
         `INSERT INTO traders (user_id, shop_name, phone, shop_address, shop_description, shop_logo, status) 
@@ -321,19 +329,23 @@ export async function POST(request: NextRequest) {
       );
 
       await connection.commit();
-
-      console.log('✅ Trader registration successful for:', email);
+      console.log('🎉 Trader registration completed successfully for:', email);
 
       return NextResponse.json({
         success: true,
-        message: 'Trader application submitted successfully. You will be notified once approved.',
+        message: shopLogoUrl 
+          ? 'Trader application submitted successfully with logo! You will be notified once approved.'
+          : 'Trader application submitted successfully! You will be notified once approved.',
         userId
       });
 
-    } catch (error) {
+    } catch (dbError) {
       await connection.rollback();
-      console.error('❌ Database transaction failed:', error);
-      throw error;
+      console.error('❌ Database transaction failed:', dbError);
+      return NextResponse.json(
+        { success: false, message: 'Database error. Please try again.' },
+        { status: 500 }
+      );
     } finally {
       connection.release();
     }
@@ -341,12 +353,16 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ Trader registration error:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { 
+        success: false, 
+        message: 'Internal server error. Please try again later.' 
+      },
       { status: 500 }
     );
   }
 }
 
+// Keep the GET function the same as before
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
