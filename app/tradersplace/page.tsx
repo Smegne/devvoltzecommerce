@@ -5,14 +5,18 @@ import { useRouter } from 'next/navigation';
 
 interface TraderData {
   id: number;
+  user_id: number;
   shop_name: string;
   phone: string;
   shop_address: string;
   shop_description: string;
   shop_logo: string;
-  status: 'pending' | 'approved' | 'rejected';
-  name: string;
-  email: string;
+  status: 'pending' | 'approved' | 'rejected' | 'blocked';
+  created_at: string;
+  updated_at: string;
+  owner_name: string;
+  owner_email: string;
+  user_created_at: string;
 }
 
 export default function TradersPlacePage() {
@@ -29,20 +33,21 @@ export default function TradersPlacePage() {
         const token = localStorage.getItem('authToken');
         const userData = localStorage.getItem('user');
         
-        console.log('Checking auth - Token:', token, 'User:', userData);
+        console.log('🔐 Checking auth - Token:', token ? 'Present' : 'Missing');
+        console.log('👤 User data:', userData);
         
         if (token && userData) {
           const parsedUser = JSON.parse(userData);
           setUser(parsedUser);
-          console.log('User found:', parsedUser);
+          console.log('✅ User found:', parsedUser.email);
           fetchTraderData(parsedUser.id);
         } else {
-          console.log('No auth token or user data found');
+          console.log('❌ No auth token or user data found');
           setLoading(false);
           setError('Please login to access trader dashboard');
         }
       } catch (err) {
-        console.error('Auth check error:', err);
+        console.error('❌ Auth check error:', err);
         setLoading(false);
         setError('Authentication error. Please login again.');
       }
@@ -50,18 +55,32 @@ export default function TradersPlacePage() {
 
     const fetchTraderData = async (userId: number) => {
       try {
-        console.log('Fetching trader data for user ID:', userId);
+        console.log('🔄 Fetching trader data for user ID:', userId);
         const response = await fetch(`/api/trader?userId=${userId}`);
-        const result = await response.json();
-        console.log('Trader API response:', result);
+        
+        console.log('📨 Response status:', response.status);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError('Trader account not found. Please apply as a trader first.');
+          } else {
+            setError('Failed to fetch trader data');
+          }
+          setLoading(false);
+          return;
+        }
 
-        if (result.success) {
+        const result = await response.json();
+        console.log('📊 Trader API response:', result);
+
+        if (result.success && result.trader) {
           setTraderData(result.trader);
+          console.log('✅ Trader data loaded:', result.trader.shop_name);
         } else {
           setError(result.message || 'Trader data not found');
         }
       } catch (err) {
-        console.error('Fetch trader data error:', err);
+        console.error('❌ Fetch trader data error:', err);
         setError('Network error. Please try again.');
       } finally {
         setLoading(false);
@@ -83,6 +102,8 @@ export default function TradersPlacePage() {
         return 'bg-green-100 text-green-800';
       case 'rejected':
         return 'bg-red-100 text-red-800';
+      case 'blocked':
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-yellow-100 text-yellow-800';
     }
@@ -139,13 +160,24 @@ export default function TradersPlacePage() {
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Trader Account Found</h3>
-          <p className="text-gray-600 mb-4">You need to apply as a trader first.</p>
-          <a 
-            href="/tradershop"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 inline-block"
-          >
-            Apply Now
-          </a>
+          <p className="text-gray-600 mb-4">
+            You have successfully registered, but your trader application is being processed.
+            {user && <span><br />User ID: {user.id} | Email: {user.email}</span>}
+          </p>
+          <div className="space-x-4">
+            <a 
+              href="/tradershop"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 inline-block"
+            >
+              Check Application Status
+            </a>
+            <button 
+              onClick={handleLogout}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 inline-block"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -167,7 +199,7 @@ export default function TradersPlacePage() {
               )}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{traderData.shop_name}</h1>
-                <p className="text-gray-600">Welcome back, {traderData.name}</p>
+                <p className="text-gray-600">Welcome back, {traderData.owner_name}</p>
               </div>
             </div>
             <div className="flex items-center space-x-4 mt-4 md:mt-0">
@@ -244,6 +276,7 @@ export default function TradersPlacePage() {
                     <h4 className="text-lg font-semibold text-yellow-800">Application Under Review</h4>
                     <p className="text-yellow-700 mt-1">
                       Your trader application is being reviewed. You'll be able to manage products once approved.
+                      Check back later or contact support for updates.
                     </p>
                   </div>
                 </div>
@@ -259,11 +292,11 @@ export default function TradersPlacePage() {
                   <dl className="space-y-2">
                     <div>
                       <dt className="text-sm text-gray-600">Owner Name</dt>
-                      <dd className="text-gray-900">{traderData.name}</dd>
+                      <dd className="text-gray-900">{traderData.owner_name}</dd>
                     </div>
                     <div>
                       <dt className="text-sm text-gray-600">Email</dt>
-                      <dd className="text-gray-900">{traderData.email}</dd>
+                      <dd className="text-gray-900">{traderData.owner_email}</dd>
                     </div>
                     <div>
                       <dt className="text-sm text-gray-600">Phone</dt>
@@ -289,7 +322,7 @@ export default function TradersPlacePage() {
               </div>
             </div>
 
-            {/* Action Cards */}
+            {/* Action Cards - Only show if approved */}
             {traderData.status === 'approved' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white rounded-lg shadow-sm p-6">
