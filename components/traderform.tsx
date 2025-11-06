@@ -179,67 +179,72 @@ export default function TraderForm3D() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!validateForm()) {
+    return;
+  }
+
+  setIsLoading(true);
+  setSuccessMessage('');
+  setShowLoginPrompt(false);
+
+  try {
+    const formDataToSend = new FormData();
+    formDataToSend.append('name', formData.name);
+    formDataToSend.append('shopName', formData.shopName);
+    formDataToSend.append('email', formData.email);
+    formDataToSend.append('phone', formData.phone);
+    formDataToSend.append('password', formData.password);
+    formDataToSend.append('shopAddress', formData.shopAddress);
+    formDataToSend.append('shopDescription', formData.shopDescription);
+    if (formData.shopLogo) {
+      formDataToSend.append('shopLogo', formData.shopLogo);
     }
 
-    setIsLoading(true);
-    setSuccessMessage('');
-    setShowLoginPrompt(false);
+    console.log('🔄 Submitting trader application...');
 
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', formData.name);
-      formDataToSend.append('shopName', formData.shopName);
-      formDataToSend.append('email', formData.email);
-      formDataToSend.append('phone', formData.phone);
-      formDataToSend.append('password', formData.password);
-      formDataToSend.append('shopAddress', formData.shopAddress);
-      formDataToSend.append('shopDescription', formData.shopDescription);
-      if (formData.shopLogo) {
-        formDataToSend.append('shopLogo', formData.shopLogo);
-      }
+    const response = await fetch('/api/trader', {
+      method: 'POST',
+      body: formDataToSend,
+    });
 
-      const response = await fetch('/api/trader', {
-        method: 'POST',
-        body: formDataToSend,
+    const result = await response.json();
+
+    if (result.success) {
+      console.log('✅ Application submitted successfully');
+      setSuccessMessage('🎉 Trader application submitted successfully! You will be notified once approved.');
+      setShowLoginPrompt(true);
+      setFormData({
+        name: '',
+        shopName: '',
+        email: '',
+        phone: '',
+        password: '',
+        confirmPassword: '',
+        shopAddress: '',
+        shopDescription: '',
+        shopLogo: null,
       });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setSuccessMessage('🎉 Trader application submitted successfully! You will be notified once approved.');
-        setShowLoginPrompt(true);
-        setFormData({
-          name: '',
-          shopName: '',
-          email: '',
-          phone: '',
-          password: '',
-          confirmPassword: '',
-          shopAddress: '',
-          shopDescription: '',
-          shopLogo: null,
-        });
-        setSelectedFileName('');
-      } else {
-        setErrors({ 
-          ...errors, 
-          submit: result.message || 'Registration failed. Please try again.' 
-        });
-      }
-    } catch (error) {
+      setSelectedFileName('');
+    } else {
+      console.error('❌ Application failed:', result.message);
       setErrors({ 
         ...errors, 
-        submit: 'Network error. Please try again.' 
+        submit: result.message || 'Registration failed. Please try again.' 
       });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('❌ Network error:', error);
+    setErrors({ 
+      ...errors, 
+      submit: 'Network error. Please check your connection and try again.' 
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleLoginRedirect = () => {
     router.push('/traderlogin');
