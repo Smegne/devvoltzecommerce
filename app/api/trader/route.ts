@@ -214,10 +214,95 @@ export async function POST(request: NextRequest) {
 }
 
 // GET method for testing
+// ... (keep the POST method the same)
+
 export async function GET(request: NextRequest) {
-  return NextResponse.json({
-    success: true,
-    message: 'Trader API is working! Use POST to submit trader applications.',
-    timestamp: new Date().toISOString()
-  });
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+
+    console.log('🔍 GET /api/trader - User ID:', userId);
+
+    if (!userId) {
+      console.log('❌ User ID is required');
+      return NextResponse.json(
+        { success: false, message: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Get trader data with proper error handling
+    const [traders] = await pool.execute(
+      `SELECT 
+        t.*,
+        u.name as owner_name,
+        u.email as owner_email,
+        u.created_at as user_created_at
+       FROM traders t 
+       JOIN users u ON t.user_id = u.id 
+       WHERE t.user_id = ?`,
+      [userId]
+    );
+
+    const trader = (traders as any[])[0];
+    
+    console.log('📊 Trader query result:', {
+      found: !!trader,
+      traderCount: (traders as any[]).length,
+      traderData: trader ? {
+        id: trader.id,
+        shop_name: trader.shop_name,
+        status: trader.status,
+        shop_logo: trader.shop_logo
+      } : 'No trader found'
+    });
+
+    if (!trader) {
+      console.log('❌ No trader found for user ID:', userId);
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Trader not found. Please apply as a trader first.' 
+        },
+        { status: 404 }
+      );
+    }
+
+    // Fix the shop_logo URL if it's a local path
+    let shopLogoUrl = trader.shop_logo;
+    if (shopLogoUrl && shopLogoUrl.startsWith('\\uploads\\')) {
+      // Convert local path to absolute URL
+      shopLogoUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${shopLogoUrl.replace(/\\/g, '/')}`;
+      console.log('🔄 Fixed shop logo URL:', shopLogoUrl);
+    }
+
+    // Return the trader data with fixed logo URL
+    const responseData = {
+      success: true,
+      trader: {
+        ...trader,
+        shop_logo: shopLogoUrl
+      }
+    };
+
+    console.log('✅ Returning trader data:', {
+      id: responseData.trader.id,
+      shop_name: responseData.trader.shop_name,
+      status: responseData.trader.status,
+      has_logo: !!responseData.trader.shop_logo
+    });
+
+    return NextResponse.json(responseData);
+
+  } catch (error) {
+    console.error('❌ Get trader error:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: 'Internal server error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
 }
