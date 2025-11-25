@@ -4,9 +4,11 @@ import { getAuthUser } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { uploadToCloudinary } from '@/lib/cloudinary' // ADD THIS IMPORT
 
 // Check if we're in production (where file system is read-only)
 const isProduction = process.env.NODE_ENV === 'production'
+const useCloudinary = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
 
 export async function POST(
   request: NextRequest,
@@ -14,6 +16,7 @@ export async function POST(
 ) {
   console.log('🖼️ Starting image upload process...')
   console.log('🌍 Environment:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT')
+  console.log('☁️ Cloudinary:', useCloudinary ? 'ENABLED' : 'DISABLED')
   
   try {
     // AWAIT the params first
@@ -84,54 +87,41 @@ export async function POST(
 
       console.log('🖼️ Processing image:', image.name, 'Type:', image.type, 'Size:', image.size)
 
-      if (isProduction) {
+      // USE CLOUDINARY IF AVAILABLE (works in both dev and prod)
+      if (useCloudinary) {
+        try {
+          console.log('☁️ Uploading to Cloudinary...')
+          const cloudinaryResult = await uploadToCloudinary(image, 'devvoltz')
+          uploadedImageUrls.push(cloudinaryResult.url)
+          console.log('✅ Cloudinary upload successful:', cloudinaryResult.url)
+        } catch (cloudinaryError) {
+          console.error('❌ Cloudinary upload failed:', cloudinaryError)
+          // Fallback to local storage in development
+          if (!isProduction) {
+            console.log('🔄 Falling back to local storage...')
+            const localUrl = await saveImageLocally(image, productId, product.title)
+            uploadedImageUrls.push(localUrl)
+          } else {
+            console.log('🚫 Production fallback: using placeholder')
+            const placeholderUrl = getPlaceholderUrl(product.title, productId)
+            uploadedImageUrls.push(placeholderUrl)
+          }
+        }
+      } else if (isProduction) {
         // PRODUCTION: Use placeholder images (file system is read-only)
         console.log('🚫 Production environment - using placeholder images')
-        const productName = encodeURIComponent(product.title || `Product-${productId}`)
-        const placeholderUrl = `/api/placeholder/400/400?text=${productName}`
+        const placeholderUrl = getPlaceholderUrl(product.title, productId)
         uploadedImageUrls.push(placeholderUrl)
         console.log('🎨 Using placeholder:', placeholderUrl)
       } else {
-        // DEVELOPMENT: Save files locally
+        // DEVELOPMENT: Save files locally (original behavior)
         try {
-          // Generate unique filename
-          const timestamp = Date.now()
-          const randomString = Math.random().toString(36).substring(2, 15)
-          const fileExtension = image.name.split('.').pop() || 'jpg'
-          const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
-
-          // Convert image to buffer
-          const bytes = await image.arrayBuffer()
-          const buffer = Buffer.from(bytes)
-
-          // Use public folder for development
-          const uploadDir = join(process.cwd(), 'public', 'uploads', 'products')
-          const filePath = join(uploadDir, fileName)
-          const publicUrl = `/uploads/products/${fileName}`
-
-          console.log('📁 Upload directory:', uploadDir)
-          console.log('💾 File path:', filePath)
-          console.log('🌐 Public URL:', publicUrl)
-
-          // Create directory if it doesn't exist
-          if (!existsSync(uploadDir)) {
-            console.log('📂 Creating upload directory...')
-            await mkdir(uploadDir, { recursive: true })
-            console.log('✅ Upload directory created')
-          }
-
-          // Save file to public folder
-          console.log('💿 Writing file...')
-          await writeFile(filePath, buffer)
-          console.log('✅ File saved successfully')
-          
-          uploadedImageUrls.push(publicUrl)
-          console.log(`✅ Image processed: ${publicUrl}`)
+          const localUrl = await saveImageLocally(image, productId, product.title)
+          uploadedImageUrls.push(localUrl)
         } catch (fileError) {
-          console.error('❌ File system error in development:', fileError)
-          // Fallback to placeholder even in development if file write fails
-          const productName = encodeURIComponent(product.title || `Product-${productId}`)
-          uploadedImageUrls.push(`/api/placeholder/400/400?text=${productName}`)
+          console.error('❌ Local file save failed:', fileError)
+          const placeholderUrl = getPlaceholderUrl(product.title, productId)
+          uploadedImageUrls.push(placeholderUrl)
         }
       }
     }
@@ -160,8 +150,8 @@ export async function POST(
       existingImages = []
     }
 
-    // Replace placeholder with actual images (or keep placeholders in production)
-    const updatedImages = [...uploadedImageUrls]
+    // Combine existing images with new ones (or replace based on your needs)
+    const updatedImages = [...existingImages, ...uploadedImageUrls]
     console.log('🔄 Final images array:', updatedImages)
 
     // Update product with new images
@@ -175,12 +165,14 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: isProduction 
+      message: useCloudinary 
+        ? 'Images uploaded to Cloudinary successfully'
+        : isProduction 
         ? 'Product created with placeholder images (file uploads disabled in production)' 
-        : 'Images uploaded successfully',
+        : 'Images uploaded to local storage successfully',
       imageUrls: uploadedImageUrls,
       totalImages: updatedImages.length,
-      environment: isProduction ? 'production' : 'development'
+      storage: useCloudinary ? 'cloudinary' : (isProduction ? 'placeholder' : 'local')
     })
 
   } catch (error) {
@@ -198,4 +190,46 @@ export async function POST(
       environment: isProduction ? 'production' : 'development'
     }, { status: 500 })
   }
+}
+
+// Helper function for local file storage (development only)
+async function saveImageLocally(image: File, productId: string, productTitle: string): Promise<string> {
+  // Generate unique filename
+  const timestamp = Date.now()
+  const randomString = Math.random().toString(36).substring(2, 15)
+  const fileExtension = image.name.split('.').pop() || 'jpg'
+  const fileName = `product-${productId}-${timestamp}-${randomString}.${fileExtension}`
+
+  // Convert image to buffer
+  const bytes = await image.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+
+  // Use public folder for development
+  const uploadDir = join(process.cwd(), 'public', 'uploads', 'products')
+  const filePath = join(uploadDir, fileName)
+  const publicUrl = `/uploads/products/${fileName}`
+
+  console.log('📁 Upload directory:', uploadDir)
+  console.log('💾 File path:', filePath)
+  console.log('🌐 Public URL:', publicUrl)
+
+  // Create directory if it doesn't exist
+  if (!existsSync(uploadDir)) {
+    console.log('📂 Creating upload directory...')
+    await mkdir(uploadDir, { recursive: true })
+    console.log('✅ Upload directory created')
+  }
+
+  // Save file to public folder
+  console.log('💿 Writing file...')
+  await writeFile(filePath, buffer)
+  console.log('✅ File saved successfully')
+  
+  return publicUrl
+}
+
+// Helper function for placeholder URLs
+function getPlaceholderUrl(productTitle: string, productId: string): string {
+  const productName = encodeURIComponent(productTitle || `Product-${productId}`)
+  return `/api/placeholder/400/400?text=${productName}`
 }
