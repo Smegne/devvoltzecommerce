@@ -90,8 +90,7 @@ export default function TraderShopPage() {
       className="min-h-screen bg-gradient-to-br from-[#051933] via-[#0a2a4d] to-[#0088CC] py-12 px-4 relative overflow-hidden"
     >
 
-      <div className="text-white bg-green-400 w-40 rounded-full  px-4"><a href="voltmarket.devvoltz.com">Back to home</a></div>
-      <br />
+     
       {/* Animated Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-[#3132DD]/20 to-transparent rounded-full blur-3xl animate-pulse parallax-element"></div>
