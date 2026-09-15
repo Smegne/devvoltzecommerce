@@ -109,6 +109,9 @@ console.log('Cart tables initialized successfully');
   
 }
 
-
+export async function query(sql: string, values?: any[]) {
+  const [results] = await pool.execute(sql, values);
+  return results as any[];
+}
 
 export default pool;
